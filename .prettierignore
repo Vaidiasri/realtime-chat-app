@@ -1,0 +1,5 @@
+dist/
+coverage/
+docs/
+.playwright-mcp/
+package-lock.json

@@ -23,10 +23,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:-postgres://chat:chat@db:5432/chat}
+      # Built from the POSTGRES_* values, not DATABASE_URL: a host .env points that at localhost.
+      DATABASE_URL: postgres://${POSTGRES_USER:-chat}:${POSTGRES_PASSWORD:-chat}@db:5432/${POSTGRES_DB:-chat}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-me-0123456789}
       ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      SEED_DEMO: ${SEED_DEMO:-true}
     ports:
       - '${APP_PORT:-3000}:3000'
     depends_on:

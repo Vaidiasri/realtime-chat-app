@@ -2,6 +2,7 @@ import http from 'node:http';
 import { Server } from 'socket.io';
 import { config } from './config.js';
 import { migrateToLatest } from './db/index.js';
+import { seedDemo } from './db/seed.js';
 import { createApp } from './app.js';
 import { logger } from './logger.js';
 import type { AppServer } from './io.js';
@@ -13,8 +14,9 @@ import { registerReceiptSocket } from './modules/receipts/socket.js';
 
 try {
   await migrateToLatest();
+  if (config.SEED_DEMO) await seedDemo();
 } catch (err) {
-  logger.fatal({ err }, 'migration failed');
+  logger.fatal({ err }, 'migration or seed failed');
   process.exit(1);
 }
 

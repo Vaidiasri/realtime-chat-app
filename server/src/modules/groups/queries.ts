@@ -1,4 +1,4 @@
-import type { Kysely, Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import { db, type Database, type Role } from '../../db/index.js';
 
 type Trx = Transaction<Database>;
@@ -37,20 +37,35 @@ export const insertGroup = (
     .returning('id')
     .executeTakeFirstOrThrow();
 
-/** Returns only the users actually added: people already in the group are skipped. */
+/**
+ * Returns only the users actually added: people already in the group are skipped. New members
+ * start with both marks at the latest message, so old history is not unread for them.
+ */
 export const insertMembers = async (
   trx: Trx,
   groupId: string,
   members: readonly { userId: string; role: Role }[],
-) =>
-  (
+) => {
+  const latest = sql<
+    string | null
+  >`(SELECT max(id) FROM messages WHERE conversation_id = ${groupId})`;
+  return (
     await trx
       .insertInto('memberships')
-      .values(members.map((m) => ({ conversation_id: groupId, user_id: m.userId, role: m.role })))
+      .values(
+        members.map((m) => ({
+          conversation_id: groupId,
+          user_id: m.userId,
+          role: m.role,
+          last_delivered_message_id: latest,
+          last_read_message_id: latest,
+        })),
+      )
       .onConflict((oc) => oc.columns(['conversation_id', 'user_id']).doNothing())
       .returning('user_id')
       .execute()
   ).map((r) => r.user_id);
+};
 
 export const memberCount = async (trx: Trx, groupId: string) =>
   Number(
@@ -117,7 +132,13 @@ export const detail = async (ex: Kysely<Database>, groupId: string) => {
   const members = await ex
     .selectFrom('memberships as m')
     .innerJoin('users as u', 'u.id', 'm.user_id')
-    .select(['m.user_id', 'm.role', 'u.display_name'])
+    .select([
+      'm.user_id',
+      'm.role',
+      'u.display_name',
+      'm.last_delivered_message_id',
+      'm.last_read_message_id',
+    ])
     .where('m.conversation_id', '=', groupId)
     .execute();
   return { group, members };

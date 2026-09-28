@@ -39,6 +39,7 @@ export interface GroupSummary {
   memberCount: number;
   myRole: Role;
   latestMessage: Message | null;
+  unreadCount: number;
   createdAt: string;
 }
 
@@ -46,6 +47,8 @@ export interface GroupMember {
   userId: string;
   displayName: string;
   role: Role;
+  lastDeliveredId: string | null;
+  lastReadId: string | null;
 }
 
 /** Members sorted owner, then admins, then members, each by display name. */

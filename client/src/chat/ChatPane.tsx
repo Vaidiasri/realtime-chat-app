@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DirectSummary, MessageSendPayload, UserSummary } from '@chat/shared';
 import type { SendResult } from '../socket';
 import {
+  covers,
   describeError,
   fetchMessages,
   keys,
@@ -21,6 +22,7 @@ interface Props {
   send: (payload: MessageSendPayload) => Promise<SendResult>;
   typers: string[];
   onTyping: (conversationId: string, on: boolean) => void;
+  onRead: (conversationId: string, messageId: string, kind: 'read') => void;
   onBack: () => void;
   onInfo: () => void;
 }
@@ -57,7 +59,16 @@ const failText: Record<string, string> = {
 // Resending cannot fix invalid_input or not_found, so those get no Retry.
 const retryable = new Set(['timeout', 'rate_limited', 'internal']);
 
-export function ChatPane({ conversationId, me, send, typers, onTyping, onBack, onInfo }: Props) {
+export function ChatPane({
+  conversationId,
+  me,
+  send,
+  typers,
+  onTyping,
+  onRead,
+  onBack,
+  onInfo,
+}: Props) {
   const qc = useQueryClient();
   const convo = useConversations().data?.find((c) => c.id === conversationId);
   const isGroup = convo?.type === 'group';
@@ -114,6 +125,52 @@ export function ChatPane({ conversationId, me, send, typers, onTyping, onBack, o
   const first = list[0];
   const last = list.at(-1);
   const firstKey = first && first.senderId + first.clientId;
+  const newestId = list.findLast((m) => !m.status)?.id;
+
+  // Open and visible means read, up to the newest loaded message.
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, []);
+  useEffect(() => {
+    if (visible && newestId) onRead(conversationId, newestId, 'read');
+  }, [visible, newestId, conversationId, onRead]);
+
+  // DM: the peer's marks give each of my messages its tick. Group: members other than me.
+  const others = group.data?.members.filter((u) => u.userId !== me.id) ?? [];
+  const receipt = (id: string) => {
+    if (convo?.type === 'direct') {
+      const status = covers(convo.peer.lastReadId, id)
+        ? 'Read'
+        : covers(convo.peer.lastDeliveredId, id)
+          ? 'Delivered'
+          : 'Sent';
+      return (
+        <div className="mt-0.5 text-right text-xs">
+          <span
+            aria-hidden="true"
+            className={status === 'Read' ? 'font-semibold text-sky-600' : 'text-slate-500'}
+          >
+            {status === 'Sent' ? '\u2713' : '\u2713\u2713'}
+          </span>
+          <span className="sr-only">{status}</span>
+        </div>
+      );
+    }
+    if (!group.data) return null;
+    const seen = others.filter((u) => covers(u.lastReadId, id)).map((u) => u.displayName);
+    return (
+      <div
+        className="mt-0.5 text-right text-xs text-slate-500"
+        title={seen.length ? seen.join(', ') : undefined}
+      >
+        Seen by {seen.length} of {others.length}
+        {seen.length > 0 && <span className="sr-only">: {seen.join(', ')}</span>}
+      </div>
+    );
+  };
   const lastKey = last && last.senderId + last.clientId;
 
   // An older page landed on top: shift by its height so the message you were reading stays put.
@@ -266,6 +323,7 @@ export function ChatPane({ conversationId, me, send, typers, onTyping, onBack, o
                   >
                     {m.body}
                   </p>
+                  {mine && !m.status && receipt(m.id)}
                   {m.status === 'sending' && (
                     <div className="mt-0.5 text-right text-xs text-slate-500">Sending...</div>
                   )}

@@ -3,6 +3,7 @@ import { conversationIdParam, historyQuery, startDirectBody } from '@chat/shared
 import { AppError } from '../../errors.js';
 import { parse, userOf } from '../../http.js';
 import type { AppServer } from '../../io.js';
+import * as receipts from '../receipts/service.js';
 import * as conversations from './service.js';
 
 export function conversationsRouter(io: AppServer): express.Router {
@@ -26,8 +27,13 @@ export function conversationsRouter(io: AppServer): express.Router {
     res.status(created ? 201 : 200).json({ conversation });
   });
 
+  // Coming back online: everything that arrived meanwhile is now delivered to this user.
   router.get('/', async (req, res) => {
-    res.json({ conversations: await conversations.listConversations(userOf(req).id) });
+    const me = userOf(req).id;
+    for (const r of await receipts.catchUpDelivered(me)) {
+      io.to(`conv:${r.conversationId}`).emit('receipt:update', r);
+    }
+    res.json({ conversations: await conversations.listConversations(me) });
   });
 
   // A malformed id is a 404 like any other id the caller cannot see.

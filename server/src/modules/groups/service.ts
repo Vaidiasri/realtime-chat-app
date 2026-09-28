@@ -33,7 +33,13 @@ const toDetail = (d: NonNullable<Awaited<ReturnType<typeof q.detail>>>): GroupDe
   name: d.group.name ?? '',
   avatarUrl: d.group.avatar_url,
   members: d.members
-    .map((m): GroupMember => ({ userId: m.user_id, displayName: m.display_name, role: m.role }))
+    .map((m): GroupMember => ({
+      userId: m.user_id,
+      displayName: m.display_name,
+      role: m.role,
+      lastDeliveredId: m.last_delivered_message_id,
+      lastReadId: m.last_read_message_id,
+    }))
     .sort(
       (a, b) => roleOrder[a.role] - roleOrder[b.role] || a.displayName.localeCompare(b.displayName),
     ),

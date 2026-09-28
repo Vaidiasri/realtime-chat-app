@@ -1,0 +1,23 @@
+{
+  "name": "chatapp",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "tsc -b shared && concurrently -k -n shared,server,client \"tsc -b -w --preserveWatchOutput shared\" \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "tsc -b && npm run build -w client",
+    "typecheck": "tsc -b && npm run typecheck -w client",
+    "start": "node server/dist/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "typescript": "^7.0.2"
+  }
+}

@@ -45,7 +45,7 @@ export function PeoplePicker({
         placeholder="Search by name or email"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+        className="input mt-1 w-full"
       />
       {searching &&
         (users.isError ? (
@@ -55,13 +55,13 @@ export function PeoplePicker({
         ) : shown.length === 0 ? (
           <p className="mt-1 text-sm text-slate-500">No one else matches that.</p>
         ) : (
-          <ul className="mt-1 max-h-48 overflow-y-auto rounded-md border border-slate-200">
+          <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 p-1">
             {shown.map((u) => (
               <li key={u.id}>
                 <button
                   type="button"
                   onClick={() => onPick(u)}
-                  className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-100"
+                  className="flex w-full flex-col rounded-lg px-3 py-2 text-left hover:bg-slate-100"
                 >
                   <span className="truncate text-sm font-medium">{u.displayName}</span>
                   <span className="truncate text-xs text-slate-500">{u.email}</span>
@@ -127,13 +127,13 @@ export function NewGroupDialog({
       ref={ref}
       onClose={onClose}
       aria-labelledby="new-group-title"
-      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-lg p-0 shadow-xl backdrop:bg-slate-900/40"
+      className="panel m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-black/30 backdrop:backdrop-blur-sm"
     >
       <form onSubmit={(e) => void submit(e)} className="flex max-h-[85dvh] flex-col">
-        <h2 id="new-group-title" className="border-b border-slate-200 px-4 py-3 font-semibold">
+        <h2 id="new-group-title" className="border-b border-slate-200/70 px-5 py-4 font-semibold">
           New group
         </h2>
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
           <div>
             <label htmlFor="group-name" className="text-sm font-medium">
               Name
@@ -144,7 +144,7 @@ export function NewGroupDialog({
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
               required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+              className="mt-1 w-full input"
             />
           </div>
           <div>
@@ -158,7 +158,7 @@ export function NewGroupDialog({
               value={avatar}
               onChange={(e) => setAvatar(e.target.value)}
               maxLength={2048}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+              className="mt-1 w-full input"
             />
           </div>
           <PeoplePicker
@@ -171,14 +171,14 @@ export function NewGroupDialog({
               {picked.map((u) => (
                 <li
                   key={u.id}
-                  className="flex items-center gap-1 rounded-full bg-slate-200 py-1 pr-1 pl-3 text-sm"
+                  className="flex items-center gap-1 rounded-full bg-accent-soft py-1 pr-1 pl-3 text-sm font-medium text-accent"
                 >
                   {u.displayName}
                   <button
                     type="button"
                     onClick={() => setPicked((p) => p.filter((x) => x.id !== u.id))}
                     aria-label={`Remove ${u.displayName}`}
-                    className="rounded-full px-2 hover:bg-slate-300"
+                    className="rounded-full px-2 hover:bg-accent/15"
                   >
                     x
                   </button>
@@ -187,25 +187,17 @@ export function NewGroupDialog({
             </ul>
           )}
         </div>
-        <div className="border-t border-slate-200 px-4 py-3">
+        <div className="border-t border-slate-200/70 px-5 py-4">
           {error && (
             <p role="alert" className="mb-2 text-sm text-red-700">
               {error}
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => ref.current?.close()}
-              className="rounded-md border border-slate-300 px-4 py-2 font-medium"
-            >
+            <button type="button" onClick={() => ref.current?.close()} className="btn px-4 py-2">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50"
-            >
+            <button type="submit" disabled={busy} className="btn btn-primary px-4 py-2">
               {busy ? 'Creating...' : 'Create'}
             </button>
           </div>

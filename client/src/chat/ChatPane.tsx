@@ -26,7 +26,7 @@ import {
   useGroup,
   type ChatMessage,
 } from './cache';
-import { formatTime } from './Sidebar';
+import { Avatar, formatTime } from './Sidebar';
 
 interface Props {
   conversationId: string;
@@ -187,7 +187,7 @@ export function ChatPane({
         <div className="mt-0.5 text-right text-xs">
           <span
             aria-hidden="true"
-            className={status === 'Read' ? 'font-semibold text-sky-600' : 'text-slate-500'}
+            className={status === 'Read' ? 'font-semibold text-accent' : 'text-slate-500'}
           >
             {status === 'Sent' ? '\u2713' : '\u2713\u2713'}
           </span>
@@ -299,14 +299,11 @@ export function ChatPane({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium md:hidden"
-        >
+      <div className="flex items-center gap-3 border-b border-slate-200/70 px-4 py-3">
+        <button type="button" onClick={onBack} className="btn md:hidden">
           Back
         </button>
+        {convo && <Avatar name={titleOf(convo)} url={isGroup ? convo.avatarUrl : null} />}
         {isGroup ? (
           <>
             <div className="flex min-w-0 flex-col">
@@ -317,11 +314,7 @@ export function ChatPane({
               </h2>
               <span className="text-xs text-slate-500">{convo.memberCount} members</span>
             </div>
-            <button
-              type="button"
-              onClick={onInfo}
-              className="ml-auto shrink-0 rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
-            >
+            <button type="button" onClick={onInfo} className="btn ml-auto shrink-0">
               Info
             </button>
           </>
@@ -338,25 +331,24 @@ export function ChatPane({
           </div>
         )}
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {messages.isPending ? (
           <p className="text-sm text-slate-500">Loading messages...</p>
         ) : messages.isError ? (
           <div className="flex flex-col items-start gap-2 text-sm">
             <p className="text-red-700">Could not load messages.</p>
-            <button
-              type="button"
-              onClick={() => void messages.refetch()}
-              className="rounded-md border border-slate-300 px-3 py-1 font-medium"
-            >
+            <button type="button" onClick={() => void messages.refetch()} className="btn">
               Retry
             </button>
           </div>
         ) : count === 0 ? (
           <p className="text-sm text-slate-500">No messages yet. Say hello.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            <li ref={topRef} className="self-center text-xs text-slate-500">
+          <ul className="flex flex-col gap-3">
+            <li
+              ref={topRef}
+              className="self-center rounded-full bg-slate-100/80 px-3 py-0.5 text-xs text-slate-500"
+            >
               {!hasMore ? (
                 'Start of conversation'
               ) : older === 'loading' || older === 'idle' ? (
@@ -381,9 +373,9 @@ export function ChatPane({
               return (
                 <li
                   key={m.clientId + m.senderId}
-                  className={`group ${mine ? 'self-end' : 'self-start'}`}
+                  className={`group relative flex max-w-full flex-col ${mine ? 'items-end self-end' : 'items-start self-start'}`}
                 >
-                  <div className="mb-0.5 text-xs text-slate-500">
+                  <div className="mb-1 px-1 text-[11px] text-slate-500">
                     {mine ? 'You' : senderName(m.senderId)} · {formatTime(m.createdAt)}
                     {m.editedAt && !m.deletedAt && ' · edited'}
                   </div>
@@ -399,31 +391,29 @@ export function ChatPane({
                         maxLength={4000}
                         onChange={(e) => setEditing({ id: m.id, text: e.target.value })}
                         onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
-                        className="min-w-0 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none md:w-80"
+                        className="input min-w-0 px-2 py-1 text-sm md:w-80"
                       />
                       <button
                         type="submit"
                         disabled={!editing.text.trim()}
-                        className="rounded-md bg-slate-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+                        className="btn btn-primary"
                       >
                         Save
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(null)}
-                        className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
-                      >
+                      <button type="button" onClick={() => setEditing(null)} className="btn">
                         Cancel
                       </button>
                     </form>
                   ) : m.deletedAt ? (
-                    <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 italic">
+                    <p className="rounded-2xl border border-dashed border-slate-300 px-3.5 py-2 text-sm text-slate-500 italic">
                       This message was deleted
                     </p>
                   ) : (
                     <div
-                      className={`max-w-[80vw] space-y-2 rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${
-                        mine ? 'bg-slate-900 text-white' : 'bg-white shadow-sm'
+                      className={`max-w-[80vw] space-y-2 rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap shadow-sm md:max-w-md ${
+                        mine
+                          ? 'rounded-br-md bg-accent text-on-accent'
+                          : 'rounded-bl-md border border-slate-200/70 bg-white/90'
                       } ${m.status ? 'opacity-70' : ''}`}
                     >
                       {m.attachment && (
@@ -453,8 +443,10 @@ export function ChatPane({
                                 },
                               })
                             }
-                            className={`rounded-full border px-2 text-sm ${
-                              on ? 'border-sky-600 bg-sky-50' : 'border-slate-300 bg-white'
+                            className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                              on
+                                ? 'border-accent/50 bg-accent-soft text-accent'
+                                : 'border-slate-200 bg-white/80 hover:bg-slate-100'
                             }`}
                           >
                             {r.emoji} {r.userIds.length}
@@ -465,15 +457,15 @@ export function ChatPane({
                   )}
                   {live && editing?.id !== m.id && (
                     <div
-                      className={`mt-0.5 flex flex-wrap gap-2 text-xs text-slate-500 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 ${
-                        mine ? 'justify-end' : ''
+                      className={`mt-1 flex flex-wrap gap-0.5 text-xs text-slate-500 transition-opacity md:glass md:panel md:absolute md:top-5 md:flex-nowrap md:rounded-lg md:p-0.5 md:whitespace-nowrap md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 ${
+                        mine ? 'justify-end md:right-full md:mr-2' : 'md:left-full md:ml-2'
                       }`}
                     >
                       <button
                         type="button"
                         aria-expanded={picker === m.id}
                         onClick={() => setPicker(picker === m.id ? null : m.id)}
-                        className="underline"
+                        className="rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 aria-expanded:bg-accent-soft aria-expanded:text-accent"
                       >
                         React
                       </button>
@@ -484,7 +476,7 @@ export function ChatPane({
                             setPicker(null);
                             setEditing({ id: m.id, text: m.body });
                           }}
-                          className="underline"
+                          className="rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-slate-100 hover:text-slate-900"
                         >
                           Edit
                         </button>
@@ -497,7 +489,7 @@ export function ChatPane({
                               void run({ event: 'message:delete', payload: { messageId: m.id } });
                             }
                           }}
-                          className="text-red-700 underline"
+                          className="rounded-md px-1.5 py-0.5 font-medium text-red-700 transition-colors hover:bg-red-50"
                         >
                           Delete
                         </button>
@@ -511,7 +503,7 @@ export function ChatPane({
                       // Near the bottom the row opens below the fold; bring it into view.
                       ref={(el) => el?.scrollIntoView({ block: 'nearest' })}
                       onKeyDown={(e) => e.key === 'Escape' && setPicker(null)}
-                      className={`mt-1 flex gap-1 ${mine ? 'justify-end' : ''}`}
+                      className="glass panel mt-1 flex w-fit gap-0.5 rounded-full p-1"
                     >
                       {REACTIONS.map((emoji) => (
                         <button
@@ -524,7 +516,7 @@ export function ChatPane({
                               payload: { messageId: m.id, emoji, on: true },
                             });
                           }}
-                          className="rounded-md border border-slate-300 bg-white px-1.5 text-lg"
+                          className="rounded-full px-1.5 text-lg leading-8 transition-transform hover:scale-125 hover:bg-slate-100"
                         >
                           {emoji}
                         </button>
@@ -557,23 +549,23 @@ export function ChatPane({
         )}
       </div>
       {actionError && (
-        <p role="alert" className="flex items-center gap-2 px-3 text-xs text-red-700">
+        <p role="alert" className="flex items-center gap-2 px-5 text-xs text-red-700">
           {actionError}
           <button type="button" onClick={() => setActionError('')} className="underline">
             Dismiss
           </button>
         </p>
       )}
-      <p role="status" className="h-5 shrink-0 truncate px-3 text-xs text-slate-500 italic">
+      <p role="status" className="h-5 shrink-0 truncate px-5 text-xs text-slate-500 italic">
         {typingText(typers.map(senderName))}
       </p>
       {fileError && (
-        <p role="alert" className="bg-red-50 px-3 py-1 text-sm text-red-700">
+        <p role="alert" className="mx-3 rounded-lg bg-red-50 px-3 py-1 text-sm text-red-700">
           {fileError}
         </p>
       )}
-      <form onSubmit={submit} className="flex gap-2 border-t border-slate-200 bg-white p-3">
-        <label className="flex cursor-pointer items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium focus-within:border-slate-900">
+      <form onSubmit={submit} className="flex gap-2 border-t border-slate-200/70 p-3">
+        <label className="btn cursor-pointer py-2 focus-within:border-accent">
           Attach
           <input
             type="file"
@@ -597,13 +589,9 @@ export function ChatPane({
           maxLength={4000}
           autoComplete="off"
           placeholder="Write a message"
-          className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+          className="input min-w-0 flex-1"
         />
-        <button
-          type="submit"
-          disabled={!draft.trim()}
-          className="rounded-md bg-slate-900 px-4 py-2 font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={!draft.trim()} className="btn btn-primary px-4 py-2">
           Send
         </button>
       </form>

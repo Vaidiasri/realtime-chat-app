@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
+import { ChatIcon, Logo } from '../icons';
 
 const toggleTheme = () => {
   const dark = document.documentElement.classList.toggle('dark');
@@ -179,51 +180,60 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
 
   const open = openId !== null;
   return (
-    <div className="flex h-dvh flex-col bg-slate-50 text-slate-900">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
-        <span className="truncate font-medium">{me.displayName}</span>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className={`text-sm ${link === 'live' ? 'text-green-700' : 'text-amber-700'}`}>
+    <div className="flex h-dvh flex-col text-slate-900 md:gap-3 md:p-3">
+      <header className="glass flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-2 md:panel md:rounded-2xl">
+        <span className="flex min-w-0 items-center gap-3">
+          <Logo />
+          <span className="hidden font-semibold tracking-tight sm:inline">Chat</span>
+          <span aria-hidden="true" className="hidden h-4 w-px bg-slate-200 sm:inline" />
+          <span className="truncate text-sm font-medium text-slate-700">{me.displayName}</span>
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 text-xs font-medium ${link === 'live' ? 'text-green-700' : 'text-amber-700'}`}
+          >
+            <span
+              aria-hidden="true"
+              className={`size-1.5 rounded-full ${link === 'live' ? 'bg-green-500' : 'animate-pulse bg-amber-500'}`}
+            />
             {link === 'live' ? 'Connected' : link === 'connecting' ? 'Connecting...' : 'Offline'}
           </span>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
-          >
+          <button type="button" onClick={toggleTheme} className="btn">
             Theme
           </button>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
-          >
+          <button type="button" onClick={() => void signOut()} className="btn">
             Log out
           </button>
         </div>
       </header>
-      <div role="status" className="empty:hidden">
+      <div role="status" className="flex flex-col gap-2 empty:hidden max-md:py-2">
         {link === 'reconnecting' && (
-          <p className="bg-amber-100 px-4 py-1 text-center text-sm font-medium text-amber-900">
+          <p className="mx-auto w-fit rounded-full bg-amber-100 px-4 py-1 text-center text-sm font-medium text-amber-900 shadow-sm">
             Reconnecting...
           </p>
         )}
         {notice && (
-          <p className="flex items-center justify-center gap-3 bg-slate-200 px-4 py-1 text-sm font-medium">
+          <p className="glass panel mx-auto flex w-fit items-center justify-center gap-3 rounded-full px-4 py-1 text-sm font-medium">
             {notice}
-            <button type="button" onClick={() => setNotice('')} className="underline">
+            <button
+              type="button"
+              onClick={() => setNotice('')}
+              className="text-accent hover:underline"
+            >
               Dismiss
             </button>
           </p>
         )}
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 md:gap-3">
         <aside
-          className={`${open ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-slate-200 bg-white md:w-80`}
+          className={`${open ? 'hidden md:flex' : 'flex'} glass w-full flex-col md:panel md:w-80 md:rounded-2xl`}
         >
           <Sidebar openId={openId} onOpen={openConversation} />
         </aside>
-        <section className={`${open ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
+        <section
+          className={`${open ? 'flex' : 'hidden md:flex'} glass min-w-0 flex-1 flex-col md:panel md:overflow-hidden md:rounded-2xl`}
+        >
           {openId ? (
             <ChatPane
               key={openId}
@@ -238,9 +248,14 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
               onInfo={() => setInfo(true)}
             />
           ) : (
-            <p className="m-auto px-4 text-center text-slate-500">
-              Pick a conversation, or search for someone to start one.
-            </p>
+            <div className="m-auto flex flex-col items-center gap-3 px-4 text-center">
+              <span className="flex size-12 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+                <ChatIcon />
+              </span>
+              <p className="max-w-xs text-sm text-slate-500">
+                Pick a conversation, or search for someone to start one.
+              </p>
+            </div>
           )}
         </section>
         {openId && info && (

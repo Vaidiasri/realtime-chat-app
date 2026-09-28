@@ -2,6 +2,8 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import type {
   ConversationSummary,
   ConversationsResponse,
+  GroupDetail,
+  GroupResponse,
   Message,
   MessagesResponse,
 } from '@chat/shared';
@@ -13,7 +15,12 @@ export type ChatMessage = Message & { status?: 'sending' | 'failed'; error?: str
 export const keys = {
   conversations: ['conversations'] as const,
   messages: (id: string) => ['messages', id] as const,
+  group: (id: string) => ['group', id] as const,
 };
+
+/** The name a conversation shows: the peer for a DM, the group name otherwise. */
+export const titleOf = (c: ConversationSummary) =>
+  c.type === 'direct' ? c.peer.displayName : c.name;
 
 /** The sidebar sort key: latest message time, else creation time. ISO strings sort as text. */
 export const activity = (c: ConversationSummary) => c.latestMessage?.createdAt ?? c.createdAt;
@@ -69,6 +76,17 @@ const SYNC_PAGES = 5;
  */
 export async function syncAll(qc: QueryClient) {
   await qc.invalidateQueries({ queryKey: keys.conversations });
+  // Removed or deleted while offline: drop what is cached for it, so nothing stale shows.
+  const list = qc.getQueryData<ConversationSummary[]>(keys.conversations);
+  if (list) {
+    const known = new Set(list.map((c) => c.id));
+    for (const prefix of ['messages', 'group']) {
+      for (const [key] of qc.getQueriesData({ queryKey: [prefix] })) {
+        if (typeof key[1] === 'string' && !known.has(key[1])) qc.removeQueries({ queryKey: key });
+      }
+    }
+  }
+  await qc.invalidateQueries({ queryKey: ['group'] });
   await Promise.all(
     qc.getQueriesData<Thread>({ queryKey: ['messages'] }).map(([key, t]) => {
       const id = key[1];
@@ -131,10 +149,50 @@ export function putConversation(qc: QueryClient, c: ConversationSummary) {
   );
 }
 
+export const useGroup = (id: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.group(id),
+    queryFn: () =>
+      apiFetch<GroupResponse>(`/api/conversations/${id}/members`).then((r) => r.data.group),
+    enabled,
+  });
+
+/** A fresh group detail: replace the cached one and patch the sidebar row to match. */
+export function putGroup(qc: QueryClient, g: GroupDetail, meId: string) {
+  qc.setQueryData(keys.group(g.id), g);
+  const myRole = g.members.find((m) => m.userId === meId)?.role;
+  qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+    list?.map((c) =>
+      c.id === g.id && c.type === 'group'
+        ? {
+            ...c,
+            name: g.name,
+            avatarUrl: g.avatarUrl,
+            memberCount: g.members.length,
+            myRole: myRole ?? c.myRole,
+          }
+        : c,
+    ),
+  );
+}
+
+/** Lost access: forget the thread, the detail and the sidebar row. */
+export function dropConversation(qc: QueryClient, id: string) {
+  qc.removeQueries({ queryKey: keys.messages(id) });
+  qc.removeQueries({ queryKey: keys.group(id) });
+  qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+    list?.filter((c) => c.id !== id),
+  );
+}
+
 const errorText: Record<string, string> = {
   rate_limited: 'Too many requests. Wait a moment and try again.',
   network: 'Cannot reach the server. Check your connection.',
   not_found: 'That is not available.',
+  forbidden: 'Your role does not allow that.',
+  group_full: 'A group can have at most 100 members.',
+  owner_must_transfer: 'Make someone else the owner before you leave.',
+  invalid_input: 'Check what you entered and try again.',
 };
 export const describeError = (e: unknown) =>
   errorText[e instanceof Error ? e.message : ''] ?? 'Something went wrong. Try again.';

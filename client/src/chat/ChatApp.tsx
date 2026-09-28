@@ -4,8 +4,9 @@ import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
 import { connectSocket, sendMessage, type AppSocket, type SendResult } from '../socket';
 import type { MessageSendPayload } from '@chat/shared';
-import { putConversation, putMessage, syncAll } from './cache';
+import { dropConversation, putConversation, putGroup, putMessage, syncAll } from './cache';
 import { ChatPane } from './ChatPane';
+import { GroupPanel } from './GroupPanel';
 import { Sidebar } from './Sidebar';
 
 export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () => void }) {
@@ -13,6 +14,13 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
   // connecting: before the first connect. reconnecting: dropped, or back but still syncing.
   const [link, setLink] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [info, setInfo] = useState(false);
+  const [notice, setNotice] = useState('');
+  // The socket handlers are bound once; they read the open pane through this ref.
+  const openRef = useRef(openId);
+  useEffect(() => {
+    openRef.current = openId;
+  }, [openId]);
   const socketRef = useRef<{ socket: AppSocket; stop: () => void }>(undefined);
 
   useEffect(() => {
@@ -31,9 +39,29 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     });
     socket.on('message:new', (m) => putMessage(qc, m));
     socket.on('conversation:new', (c) => putConversation(qc, c));
+    socket.on('group:updated', (g) => putGroup(qc, g, me.id));
+    socket.on('group:removed', (r) => {
+      dropConversation(qc, r.conversationId);
+      if (openRef.current !== r.conversationId) return;
+      setOpenId(null);
+      setInfo(false);
+      setNotice(
+        r.reason === 'deleted'
+          ? `${r.name} was deleted.`
+          : r.reason === 'left'
+            ? `You left ${r.name}.`
+            : `You were removed from ${r.name}.`,
+      );
+    });
     socketRef.current = conn;
     return conn.stop;
-  }, [qc, onSignedOut]);
+  }, [qc, onSignedOut, me.id]);
+
+  const openConversation = (id: string | null) => {
+    setOpenId(id);
+    setInfo(false);
+    setNotice('');
+  };
 
   const signOut = async () => {
     socketRef.current?.stop();
@@ -71,12 +99,20 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
             Reconnecting...
           </p>
         )}
+        {notice && (
+          <p className="flex items-center justify-center gap-3 bg-slate-200 px-4 py-1 text-sm font-medium">
+            {notice}
+            <button type="button" onClick={() => setNotice('')} className="underline">
+              Dismiss
+            </button>
+          </p>
+        )}
       </div>
       <div className="flex min-h-0 flex-1">
         <aside
           className={`${open ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-slate-200 bg-white md:w-80`}
         >
-          <Sidebar openId={openId} onOpen={setOpenId} />
+          <Sidebar openId={openId} onOpen={openConversation} />
         </aside>
         <section className={`${open ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
           {openId ? (
@@ -85,7 +121,8 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
               conversationId={openId}
               me={me}
               send={send}
-              onBack={() => setOpenId(null)}
+              onBack={() => openConversation(null)}
+              onInfo={() => setInfo(true)}
             />
           ) : (
             <p className="m-auto px-4 text-center text-slate-500">
@@ -93,6 +130,9 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
             </p>
           )}
         </section>
+        {openId && info && (
+          <GroupPanel key={openId} groupId={openId} me={me} onClose={() => setInfo(false)} />
+        )}
       </div>
     </div>
   );

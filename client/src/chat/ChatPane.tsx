@@ -8,7 +8,9 @@ import {
   keys,
   loadOlder,
   putMessage,
+  titleOf,
   useConversations,
+  useGroup,
   type ChatMessage,
 } from './cache';
 import { formatTime } from './Sidebar';
@@ -18,6 +20,7 @@ interface Props {
   me: UserSummary;
   send: (payload: MessageSendPayload) => Promise<SendResult>;
   onBack: () => void;
+  onInfo: () => void;
 }
 
 const failText: Record<string, string> = {
@@ -30,9 +33,16 @@ const failText: Record<string, string> = {
 // Resending cannot fix invalid_input or not_found, so those get no Retry.
 const retryable = new Set(['timeout', 'rate_limited', 'internal']);
 
-export function ChatPane({ conversationId, me, send, onBack }: Props) {
+export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
   const qc = useQueryClient();
-  const peer = useConversations().data?.find((c) => c.id === conversationId)?.peer;
+  const convo = useConversations().data?.find((c) => c.id === conversationId);
+  const isGroup = convo?.type === 'group';
+  const group = useGroup(conversationId, isGroup);
+  // Someone who left keeps their messages; their name is gone with the membership.
+  const senderName = (id: string) =>
+    convo?.type === 'direct'
+      ? convo.peer.displayName
+      : (group.data?.members.find((m) => m.userId === id)?.displayName ?? 'Former member');
   const messages = useQuery({
     queryKey: keys.messages(conversationId),
     queryFn: () => fetchMessages(qc, conversationId),
@@ -121,7 +131,27 @@ export function ChatPane({ conversationId, me, send, onBack }: Props) {
         >
           Back
         </button>
-        <h2 className="truncate font-semibold">{peer?.displayName ?? 'Conversation'}</h2>
+        {isGroup ? (
+          <>
+            <div className="flex min-w-0 flex-col">
+              <h2 className="truncate font-semibold">
+                <button type="button" onClick={onInfo} className="truncate hover:underline">
+                  {convo.name}
+                </button>
+              </h2>
+              <span className="text-xs text-slate-500">{convo.memberCount} members</span>
+            </div>
+            <button
+              type="button"
+              onClick={onInfo}
+              className="ml-auto shrink-0 rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
+            >
+              Info
+            </button>
+          </>
+        ) : (
+          <h2 className="truncate font-semibold">{convo ? titleOf(convo) : 'Conversation'}</h2>
+        )}
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">
         {messages.isPending ? (
@@ -164,7 +194,7 @@ export function ChatPane({ conversationId, me, send, onBack }: Props) {
               return (
                 <li key={m.clientId + m.senderId} className={mine ? 'self-end' : 'self-start'}>
                   <div className="mb-0.5 text-xs text-slate-500">
-                    {mine ? 'You' : (peer?.displayName ?? 'Them')} · {formatTime(m.createdAt)}
+                    {mine ? 'You' : senderName(m.senderId)} · {formatTime(m.createdAt)}
                   </div>
                   <p
                     className={`max-w-[80vw] rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${

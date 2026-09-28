@@ -115,11 +115,20 @@ export const summaries = (userId: string, conversationId?: string) => {
   return query.orderBy(sql`coalesce(lm.created_at, c.created_at)`, 'desc').execute();
 };
 
-export const latestMessages = (conversationId: string, limit: number) =>
-  db
+/** One page of history. `after` reads ascending (gap fill), otherwise descending from `before`. */
+export const messagePage = (
+  conversationId: string,
+  limit: number,
+  cursor: { before?: string; after?: string },
+) => {
+  let query = db
     .selectFrom('messages')
     .select(messageColumns)
-    .where('conversation_id', '=', conversationId)
-    .orderBy('id', 'desc')
+    .where('conversation_id', '=', conversationId);
+  if (cursor.after) query = query.where('id', '>', cursor.after);
+  if (cursor.before) query = query.where('id', '<', cursor.before);
+  return query
+    .orderBy('id', cursor.after ? 'asc' : 'desc')
     .limit(limit)
     .execute();
+};

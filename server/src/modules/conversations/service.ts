@@ -1,4 +1,10 @@
-import type { ConversationSummary, Message, MessageSendPayload } from '@chat/shared';
+import type {
+  ConversationSummary,
+  HistoryQuery,
+  Message,
+  MessageSendPayload,
+  MessagesResponse,
+} from '@chat/shared';
 import { AppError } from '../../errors.js';
 import * as q from './queries.js';
 
@@ -119,7 +125,17 @@ export async function listConversations(userId: string): Promise<ConversationSum
   return (await q.summaries(userId)).map(toSummary);
 }
 
-export async function history(userId: string, conversationId: string): Promise<Message[]> {
+export async function history(
+  userId: string,
+  conversationId: string,
+  cursor: HistoryQuery,
+): Promise<MessagesResponse> {
   await assertMember(userId, conversationId);
-  return (await q.latestMessages(conversationId, HISTORY_LIMIT)).map(toMessage).reverse();
+  // One extra row tells whether another page exists, without a count query.
+  const rows = await q.messagePage(conversationId, HISTORY_LIMIT + 1, cursor);
+  const page = rows.slice(0, HISTORY_LIMIT).map(toMessage);
+  return {
+    messages: cursor.after ? page : page.reverse(),
+    hasMore: rows.length > HISTORY_LIMIT,
+  };
 }

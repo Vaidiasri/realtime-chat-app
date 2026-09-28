@@ -12,10 +12,13 @@ export const db = new Kysely<Database>({
 });
 
 export async function migrateToLatest(): Promise<void> {
-  const migrator = new Migrator({ db, provider: { getMigrations: async () => migrations } });
+  const migrator = new Migrator({
+    db,
+    provider: { getMigrations: () => Promise.resolve(migrations) },
+  });
   const { error, results } = await migrator.migrateToLatest();
   for (const r of results ?? []) {
     if (r.status === 'Error') console.error(`migration failed: ${r.migrationName}`);
   }
-  if (error) throw error;
+  if (error) throw new Error('migration failed', { cause: error });
 }

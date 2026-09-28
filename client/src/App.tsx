@@ -10,7 +10,8 @@ export function App() {
       .then(setHealth, () => setHealth('error'));
   }, []);
 
-  const label = health === null ? 'checking...' : health === 'error' ? 'unreachable' : `db ${health.db}`;
+  const label =
+    health === null ? 'checking...' : health === 'error' ? 'unreachable' : `db ${health.db}`;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-900">

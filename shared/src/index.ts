@@ -6,10 +6,12 @@ import type {
   MessageSendPayload,
 } from './conversations.js';
 import type { GroupAck, GroupDetail, GroupRemoved } from './groups.js';
+import type { PresenceUpdate, TypingPayload, TypingUpdate } from './presence.js';
 
 export * from './auth.js';
 export * from './conversations.js';
 export * from './groups.js';
+export * from './presence.js';
 
 // Socket event contracts shared by client and server. Each feature adds its events here.
 export interface ServerToClientEvents {
@@ -17,6 +19,8 @@ export interface ServerToClientEvents {
   'conversation:new': (c: ConversationSummary) => void;
   'group:updated': (g: GroupDetail) => void;
   'group:removed': (r: GroupRemoved) => void;
+  'presence:update': (p: PresenceUpdate) => void;
+  'typing:update': (t: TypingUpdate) => void;
 }
 
 // Group payloads are validated on the server with the zod schemas in groups.ts.
@@ -33,6 +37,8 @@ export interface ClientToServerEvents {
   'group:setRole': GroupCall<Ref & { userId: string; role: 'admin' | 'member' }>;
   'group:transfer': GroupCall<Ref & { userId: string }>;
   'group:delete': GroupCall<Ref>;
+  'typing:start': (payload: TypingPayload) => void;
+  'typing:stop': (payload: TypingPayload) => void;
 }
 
 export interface HealthResponse {

@@ -131,11 +131,20 @@ export function Sidebar({ openId, onOpen }: Props) {
                   aria-current={c.id === openId ? 'true' : undefined}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100 aria-[current]:bg-slate-200"
                 >
-                  <Avatar
-                    key={c.type === 'group' ? c.avatarUrl : null}
-                    name={titleOf(c)}
-                    url={c.type === 'group' ? c.avatarUrl : null}
-                  />
+                  <span className="relative shrink-0">
+                    <Avatar
+                      key={c.type === 'group' ? c.avatarUrl : null}
+                      name={titleOf(c)}
+                      url={c.type === 'group' ? c.avatarUrl : null}
+                    />
+                    {c.type === 'direct' && c.peer.online && (
+                      <span
+                        role="img"
+                        aria-label="online"
+                        className="absolute right-0 bottom-0 size-2.5 rounded-full bg-green-500 ring-2 ring-white"
+                      />
+                    )}
+                  </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="truncate font-medium">{titleOf(c)}</span>

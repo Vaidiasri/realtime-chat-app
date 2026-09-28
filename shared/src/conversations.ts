@@ -20,7 +20,7 @@ export interface UserSummary {
 export interface DirectSummary {
   id: string;
   type: 'direct';
-  peer: { id: string; displayName: string };
+  peer: { id: string; displayName: string; online: boolean; lastSeenAt: string | null };
   latestMessage: Message | null;
   createdAt: string;
 }

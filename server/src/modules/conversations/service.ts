@@ -8,6 +8,7 @@ import type {
   MessagesResponse,
 } from '@chat/shared';
 import { AppError } from '../../errors.js';
+import { isOnline } from '../presence/service.js';
 import * as q from './queries.js';
 
 const HISTORY_LIMIT = 50;
@@ -60,7 +61,12 @@ type GroupRow = Awaited<ReturnType<typeof q.groupSummaries>>[number];
 const toSummary = (r: DirectRow): DirectSummary => ({
   id: r.id,
   type: 'direct',
-  peer: { id: r.peer_id, displayName: r.peer_name },
+  peer: {
+    id: r.peer_id,
+    displayName: r.peer_name,
+    online: isOnline(r.peer_id),
+    lastSeenAt: r.peer_last_seen?.toISOString() ?? null,
+  },
   latestMessage: latestOf(r),
   createdAt: r.created_at.toISOString(),
 });

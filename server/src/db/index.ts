@@ -29,6 +29,7 @@ export interface UsersTable {
 export interface RefreshTokensTable {
   id: Generated<string>;
   user_id: string;
+  session_id: string;
   token_hash: string;
   expires_at: ColumnType<Date, Date | string, Date | string>;
   revoked_at: NullableTimestamp;

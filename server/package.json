@@ -8,9 +8,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
+    "jose": "^6.2.12",
     "kysely": "^0.29.6",
     "pg": "^8.23.0",
     "pino": "^10.3.1",

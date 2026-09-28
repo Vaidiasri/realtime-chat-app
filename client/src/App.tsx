@@ -23,7 +23,8 @@ export function App() {
 
   if (session === undefined) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600">
+      <main className="flex h-full items-center justify-center gap-3 text-sm text-slate-500">
+        <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-accent" />
         Loading...
       </main>
     );

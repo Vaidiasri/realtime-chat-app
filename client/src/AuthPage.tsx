@@ -1,6 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { loginBody, signupBody, type AuthResponse } from '@chat/shared';
 import { login, signup } from './api';
+import { Logo } from './icons';
+
+const Brand = () => (
+  <div className="flex items-center gap-3">
+    <Logo />
+    <span className="text-lg font-semibold tracking-tight text-slate-900">Chat</span>
+  </div>
+);
 
 type Mode = 'login' | 'signup';
 type Field = 'email' | 'password' | 'displayName';
@@ -54,7 +62,7 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
 
   const field = (name: Field, label: string, type: string, autoComplete: string) => (
     <div className="flex flex-col gap-1">
-      <label htmlFor={name} className="text-sm font-medium">
+      <label htmlFor={name} className="text-sm font-medium text-slate-700">
         {label}
       </label>
       <input
@@ -65,7 +73,7 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
         onChange={(e) => setValues({ ...values, [name]: e.target.value })}
         aria-invalid={errors[name] ? true : undefined}
         aria-describedby={errors[name] ? `${name}-error` : undefined}
-        className="rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none aria-invalid:border-red-600"
+        className="input"
       />
       {errors[name] && (
         <p id={`${name}-error`} className="text-sm text-red-700">
@@ -77,13 +85,21 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
 
   const isSignup = mode === 'signup';
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-slate-900">
+    <main className="flex h-full flex-col items-center justify-center overflow-y-auto px-4 py-8 text-slate-900">
+      <Brand />
       <form
         onSubmit={(e) => void submit(e)}
         noValidate
-        className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-white p-6 shadow"
+        className="glass panel mt-6 flex w-full max-w-sm flex-col gap-4 rounded-2xl p-7"
       >
-        <h1 className="text-xl font-semibold">{isSignup ? 'Create an account' : 'Log in'}</h1>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {isSignup ? 'Create an account' : 'Log in'}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {isSignup ? 'Start chatting in seconds.' : 'Welcome back. Pick up where you left off.'}
+          </p>
+        </div>
         {isSignup && field('displayName', 'Name', 'text', 'name')}
         {field('email', 'Email', 'email', 'email')}
         {field('password', 'Password', 'password', isSignup ? 'new-password' : 'current-password')}
@@ -92,19 +108,15 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
             {formError}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
-        >
+        <button type="submit" disabled={pending} className="btn btn-primary py-2">
           {pending ? 'Please wait...' : isSignup ? 'Sign up' : 'Log in'}
         </button>
-        <p className="text-sm text-slate-600">
+        <p className="text-center text-sm text-slate-500">
           {isSignup ? 'Already have an account? ' : 'New here? '}
           <button
             type="button"
             onClick={() => switchMode(isSignup ? 'login' : 'signup')}
-            className="font-medium text-slate-900 underline"
+            className="font-medium text-accent hover:underline"
           >
             {isSignup ? 'Log in' : 'Sign up'}
           </button>

@@ -40,7 +40,7 @@ export function AttachmentView({
   if (isImage && url.data) {
     return (
       <a href={url.data} target="_blank" rel="noreferrer" className="block">
-        <img src={url.data} alt={file.name} className="max-h-64 max-w-full rounded-md" />
+        <img src={url.data} alt={file.name} className="max-h-64 max-w-full rounded-xl" />
       </a>
     );
   }
@@ -48,7 +48,7 @@ export function AttachmentView({
     <button
       type="button"
       onClick={() => void download()}
-      className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-left text-sm"
+      className="flex items-center gap-2 rounded-xl border border-current/20 bg-current/5 px-3 py-2 text-left text-sm"
     >
       <span aria-hidden="true">{'\u{1F4CE}'}</span>
       <span className="min-w-0 truncate font-medium">{file.name}</span>

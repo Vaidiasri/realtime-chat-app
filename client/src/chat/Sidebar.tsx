@@ -53,7 +53,7 @@ export function Sidebar({ openId, onOpen }: Props) {
 
   return (
     <>
-      <div className="border-b border-slate-200 p-3">
+      <div className="border-b border-slate-200/70 p-3">
         <div className="flex gap-2">
           <label htmlFor="user-search" className="sr-only">
             Search people
@@ -61,15 +61,15 @@ export function Sidebar({ openId, onOpen }: Props) {
           <input
             id="user-search"
             type="search"
-            placeholder="Search people by name or email"
+            placeholder="Search people"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+            className="input min-w-0 flex-1 text-sm"
           />
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium"
+            className="btn btn-primary shrink-0"
           >
             New group
           </button>
@@ -80,7 +80,7 @@ export function Sidebar({ openId, onOpen }: Props) {
           </p>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {searching ? (
           users.isError ? (
             <p className="p-4 text-sm text-red-700">{describeError(users.error)}</p>
@@ -95,7 +95,7 @@ export function Sidebar({ openId, onOpen }: Props) {
                   <button
                     type="button"
                     onClick={() => void start(u.id)}
-                    className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-100"
+                    className="flex w-full flex-col rounded-xl px-3 py-2.5 text-left hover:bg-slate-100/80"
                   >
                     <span className="truncate font-medium">{u.displayName}</span>
                     <span className="truncate text-sm text-slate-500">{u.email}</span>
@@ -109,11 +109,7 @@ export function Sidebar({ openId, onOpen }: Props) {
         ) : conversations.isError ? (
           <div className="flex flex-col items-start gap-2 p-4 text-sm">
             <p className="text-red-700">Could not load conversations.</p>
-            <button
-              type="button"
-              onClick={() => void conversations.refetch()}
-              className="rounded-md border border-slate-300 px-3 py-1 font-medium"
-            >
+            <button type="button" onClick={() => void conversations.refetch()} className="btn">
               Retry
             </button>
           </div>
@@ -122,14 +118,14 @@ export function Sidebar({ openId, onOpen }: Props) {
             No conversations yet. Search for someone to start one.
           </p>
         ) : (
-          <ul>
+          <ul className="flex flex-col gap-0.5">
             {sorted.map((c) => (
               <li key={c.id}>
                 <button
                   type="button"
                   onClick={() => onOpen(c.id)}
                   aria-current={c.id === openId ? 'true' : undefined}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100 aria-[current]:bg-slate-200"
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-100/80 aria-[current]:bg-accent-soft"
                 >
                   <span className="relative shrink-0">
                     <Avatar
@@ -147,13 +143,13 @@ export function Sidebar({ openId, onOpen }: Props) {
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate font-medium">{titleOf(c)}</span>
+                      <span className="truncate text-sm font-semibold">{titleOf(c)}</span>
                       <time className="shrink-0 text-xs text-slate-500" dateTime={activity(c)}>
                         {formatTime(activity(c))}
                       </time>
                     </span>
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm text-slate-500">
+                      <span className="truncate text-[13px] text-slate-500">
                         {c.latestMessage
                           ? c.latestMessage.deletedAt
                             ? 'Message deleted'
@@ -161,7 +157,7 @@ export function Sidebar({ openId, onOpen }: Props) {
                           : 'No messages yet'}
                       </span>
                       {c.unreadCount > 0 && (
-                        <span className="shrink-0 rounded-full bg-slate-900 px-1.5 text-xs font-semibold text-white">
+                        <span className="shrink-0 min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] leading-5 font-semibold text-on-accent">
                           {c.unreadCount > 99 ? '99+' : c.unreadCount}
                           <span className="sr-only"> unread</span>
                         </span>
@@ -201,12 +197,12 @@ export function Avatar({ name, url }: { name: string; url: string | null }) {
       src={url}
       alt=""
       onError={() => setBroken(true)}
-      className="size-9 shrink-0 rounded-full object-cover"
+      className="size-10 shrink-0 rounded-full object-cover"
     />
   ) : (
     <span
       aria-hidden="true"
-      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-300 text-sm font-semibold text-slate-700"
+      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-sm font-semibold text-slate-700"
     >
       {initials || '?'}
     </span>

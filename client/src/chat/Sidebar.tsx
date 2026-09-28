@@ -154,7 +154,11 @@ export function Sidebar({ openId, onOpen }: Props) {
                     </span>
                     <span className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm text-slate-500">
-                        {c.latestMessage?.body ?? 'No messages yet'}
+                        {c.latestMessage
+                          ? c.latestMessage.deletedAt
+                            ? 'Message deleted'
+                            : c.latestMessage.body
+                          : 'No messages yet'}
                       </span>
                       {c.unreadCount > 0 && (
                         <span className="shrink-0 rounded-full bg-slate-900 px-1.5 text-xs font-semibold text-white">

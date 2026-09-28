@@ -8,6 +8,8 @@ const messageColumns = [
   'client_id',
   'body',
   'created_at',
+  'edited_at',
+  'deleted_at',
 ] as const;
 
 // Messages from others after my read mark. Deleted ones (null body) do not count.
@@ -119,6 +121,8 @@ export const summaries = (userId: string, conversationId?: string) => {
       'lm.client_id as m_client_id',
       'lm.body as m_body',
       'lm.created_at as m_created_at',
+      'lm.edited_at as m_edited_at',
+      'lm.deleted_at as m_deleted_at',
     ])
     .where('me.user_id', '=', userId)
     .where('c.type', '=', 'direct');
@@ -177,9 +181,84 @@ export const groupSummaries = (userId: string, conversationId?: string) => {
       'lm.client_id as m_client_id',
       'lm.body as m_body',
       'lm.created_at as m_created_at',
+      'lm.edited_at as m_edited_at',
+      'lm.deleted_at as m_deleted_at',
     ])
     .where('me.user_id', '=', userId)
     .where('c.type', '=', 'group');
   if (conversationId) query = query.where('c.id', '=', conversationId);
   return query.execute();
 };
+
+export const findMessage = (id: string) =>
+  db.selectFrom('messages').select(messageColumns).where('id', '=', id).executeTakeFirst();
+
+// The guards repeat the service checks, so a concurrent delete or a closing window still wins.
+export const editMessage = (id: string, senderId: string, body: string) =>
+  db
+    .updateTable('messages')
+    .set({ body, edited_at: sql`now()` })
+    .where('id', '=', id)
+    .where('sender_id', '=', senderId)
+    .where('deleted_at', 'is', null)
+    .returning(messageColumns)
+    .executeTakeFirst();
+
+/** Tombstones the message and drops its reactions. The 10 minute window uses the DB clock. */
+export const deleteMessage = (id: string, senderId: string) =>
+  db.transaction().execute(async (trx) => {
+    const row = await trx
+      .updateTable('messages')
+      .set({ body: null, deleted_at: sql`now()` })
+      .where('id', '=', id)
+      .where('sender_id', '=', senderId)
+      .where('deleted_at', 'is', null)
+      .where('created_at', '>', sql<Date>`now() - interval '10 minutes'`)
+      .returning(messageColumns)
+      .executeTakeFirst();
+    if (row) await trx.deleteFrom('reactions').where('message_id', '=', id).execute();
+    return row;
+  });
+
+/** True when a row changed. Adding goes through a SELECT so a deleted message takes none. */
+export const setReaction = async (messageId: string, userId: string, emoji: string, on: boolean) =>
+  on
+    ? ((
+        await db
+          .insertInto('reactions')
+          .columns(['message_id', 'user_id', 'emoji'])
+          .expression((eb) =>
+            eb
+              .selectFrom('messages')
+              .select(['id', eb.val(userId).as('user_id'), eb.val(emoji).as('emoji')])
+              .where('id', '=', messageId)
+              .where('deleted_at', 'is', null),
+          )
+          .onConflict((oc) => oc.doNothing())
+          .executeTakeFirst()
+      ).numInsertedOrUpdatedRows ?? 0n) > 0n
+    : (
+        await db
+          .deleteFrom('reactions')
+          .where('message_id', '=', messageId)
+          .where('user_id', '=', userId)
+          .where('emoji', '=', emoji)
+          .executeTakeFirst()
+      ).numDeletedRows > 0n;
+
+/** Reactions for a set of messages, one row per message and emoji. */
+export const reactionsFor = (messageIds: readonly string[]) =>
+  messageIds.length === 0
+    ? Promise.resolve([])
+    : db
+        .selectFrom('reactions')
+        .select([
+          'message_id',
+          'emoji',
+          // text, not uuid: pg parses text[] into a JS array without extra type setup.
+          sql<string[]>`array_agg(user_id::text ORDER BY created_at)`.as('user_ids'),
+        ])
+        .where('message_id', 'in', messageIds)
+        .groupBy(['message_id', 'emoji'])
+        .orderBy(sql`min(created_at)`)
+        .execute();

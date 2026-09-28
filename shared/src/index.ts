@@ -2,6 +2,10 @@ import type { AuthRefreshAck, AuthRefreshPayload } from './auth.js';
 import type {
   ConversationSummary,
   Message,
+  MessageActionAck,
+  MessageDeletePayload,
+  MessageEditPayload,
+  MessageReactPayload,
   MessageSendAck,
   MessageSendPayload,
 } from './conversations.js';
@@ -18,6 +22,8 @@ export * from './receipts.js';
 // Socket event contracts shared by client and server. Each feature adds its events here.
 export interface ServerToClientEvents {
   'message:new': (m: Message) => void;
+  /** An edit, a delete or a reaction change: the full message as it now stands. */
+  'message:updated': (m: Message) => void;
   'conversation:new': (c: ConversationSummary) => void;
   'group:updated': (g: GroupDetail) => void;
   'group:removed': (r: GroupRemoved) => void;
@@ -29,10 +35,14 @@ export interface ServerToClientEvents {
 // Group payloads are validated on the server with the zod schemas in groups.ts.
 type GroupCall<P> = (payload: P, ack: (r: GroupAck) => void) => void;
 type Ref = { conversationId: string };
+type MessageCall<P> = (payload: P, ack: (r: MessageActionAck) => void) => void;
 
 export interface ClientToServerEvents {
   'auth:refresh': (payload: AuthRefreshPayload, ack: (r: AuthRefreshAck) => void) => void;
   'message:send': (payload: MessageSendPayload, ack: (r: MessageSendAck) => void) => void;
+  'message:edit': MessageCall<MessageEditPayload>;
+  'message:delete': MessageCall<MessageDeletePayload>;
+  'message:react': MessageCall<MessageReactPayload>;
   'group:create': GroupCall<{ name: string; avatarUrl?: string; memberIds?: string[] }>;
   'group:update': GroupCall<Ref & { name?: string; avatarUrl?: string | null }>;
   'group:addMembers': GroupCall<Ref & { userIds: string[] }>;

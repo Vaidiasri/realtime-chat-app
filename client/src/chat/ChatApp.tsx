@@ -2,7 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
-import { connectSocket, sendMessage, type AppSocket, type SendResult } from '../socket';
+import {
+  connectSocket,
+  messageAction,
+  sendMessage,
+  type ActionResult,
+  type AppSocket,
+  type MessageAction,
+  type SendResult,
+} from '../socket';
 import type { MessageSendPayload } from '@chat/shared';
 import {
   bumpUnread,
@@ -101,6 +109,7 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
       mark(m.conversationId, m.id, 'delivered');
       bumpUnread(qc, m.conversationId);
     });
+    socket.on('message:updated', (m) => putMessage(qc, m));
     socket.on('receipt:update', (r) => putReceipt(qc, r, me.id));
     socket.on('presence:update', (p) => putPresence(qc, p));
     // The sender's other tabs get their own typing too; never show yourself.
@@ -145,6 +154,11 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
   const send = (payload: MessageSendPayload): Promise<SendResult> =>
     socketRef.current
       ? sendMessage(socketRef.current.socket, payload)
+      : Promise.resolve({ ok: false, error: 'timeout' });
+
+  const act = (a: MessageAction): Promise<ActionResult> =>
+    socketRef.current
+      ? messageAction(socketRef.current.socket, a)
       : Promise.resolve({ ok: false, error: 'timeout' });
 
   // Volatile: a typing event is worthless later, so it is dropped while offline, not queued.
@@ -200,6 +214,7 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
               conversationId={openId}
               me={me}
               send={send}
+              act={act}
               typers={Object.keys(typing[openId] ?? {})}
               onTyping={signalTyping}
               onRead={mark}

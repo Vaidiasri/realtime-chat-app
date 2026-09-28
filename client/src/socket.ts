@@ -1,6 +1,10 @@
 import { io, type Socket } from 'socket.io-client';
 import type {
   ClientToServerEvents,
+  MessageActionAck,
+  MessageDeletePayload,
+  MessageEditPayload,
+  MessageReactPayload,
   MessageSendAck,
   MessageSendPayload,
   ServerToClientEvents,
@@ -105,4 +109,19 @@ export async function sendMessage(
     }
   }
   return { ok: false, error: 'timeout' };
+}
+
+export type ActionResult = MessageActionAck | { ok: false; error: 'timeout' };
+export type MessageAction =
+  | { event: 'message:edit'; payload: MessageEditPayload }
+  | { event: 'message:delete'; payload: MessageDeletePayload }
+  | { event: 'message:react'; payload: MessageReactPayload };
+
+/** One attempt: each action is safe to repeat, so the user can simply try again. */
+export async function messageAction(socket: AppSocket, a: MessageAction): Promise<ActionResult> {
+  try {
+    return (await socket.timeout(10_000).emitWithAck(a.event, a.payload)) as MessageActionAck;
+  } catch {
+    return { ok: false, error: 'timeout' };
+  }
 }

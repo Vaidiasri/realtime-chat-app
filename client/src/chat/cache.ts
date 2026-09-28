@@ -105,7 +105,12 @@ async function syncThread(qc: QueryClient, id: string, t: Thread) {
   for (let i = 0; last && i < SYNC_PAGES; i++) {
     const data = await page(id, `?after=${last}`);
     for (const m of data.messages) putMessage(qc, m);
-    if (!data.hasMore) return;
+    if (!data.hasMore) {
+      // Edits, deletes and reactions made while offline: refresh the newest page in place.
+      // ponytail: older loaded pages stay as they were until the thread is opened again.
+      for (const m of (await page(id)).messages) putMessage(qc, m);
+      return;
+    }
     last = data.messages.at(-1)?.id;
   }
   qc.setQueryData(keys.messages(id), await fetchMessages(qc, id));
@@ -239,6 +244,8 @@ const errorText: Record<string, string> = {
   group_full: 'A group can have at most 100 members.',
   owner_must_transfer: 'Make someone else the owner before you leave.',
   invalid_input: 'Check what you entered and try again.',
+  too_late: 'A message can only be deleted within 10 minutes of sending it.',
+  timeout: 'No reply from the server. Try again.',
 };
 export const describeError = (e: unknown) =>
   errorText[e instanceof Error ? e.message : ''] ?? 'Something went wrong. Try again.';

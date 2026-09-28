@@ -4,8 +4,12 @@ import type {
   GroupSummary,
   HistoryQuery,
   Message,
+  MessageDeletePayload,
+  MessageEditPayload,
+  MessageReactPayload,
   MessageSendPayload,
   MessagesResponse,
+  Reaction,
 } from '@chat/shared';
 import { AppError } from '../../errors.js';
 import { isOnline } from '../presence/service.js';
@@ -22,17 +26,32 @@ type MessageRow = {
   client_id: string;
   body: string | null;
   created_at: Date;
+  edited_at: Date | null;
+  deleted_at: Date | null;
 };
 
-// ponytail: body is null only for deleted messages, which arrive with feature 11.
-const toMessage = (r: MessageRow): Message => ({
+// body is null only for a deleted message; the client shows deletedAt instead of the text.
+const toMessage = (r: MessageRow, reactions: Reaction[] = []): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
   senderId: r.sender_id,
   clientId: r.client_id,
   body: r.body ?? '',
   createdAt: r.created_at.toISOString(),
+  editedAt: r.edited_at?.toISOString() ?? null,
+  deletedAt: r.deleted_at?.toISOString() ?? null,
+  reactions,
 });
+
+/** The messages with their reactions attached, in one extra query. */
+async function withReactions(rows: readonly MessageRow[]): Promise<Message[]> {
+  const byMessage = new Map<string, Reaction[]>();
+  for (const r of await q.reactionsFor(rows.map((m) => m.id))) {
+    const list = byMessage.get(r.message_id) ?? [];
+    byMessage.set(r.message_id, [...list, { emoji: r.emoji, userIds: r.user_ids }]);
+  }
+  return rows.map((r) => toMessage(r, byMessage.get(r.id)));
+}
 
 type LatestColumns = {
   id: string;
@@ -41,6 +60,8 @@ type LatestColumns = {
   m_client_id: string | null;
   m_body: string | null;
   m_created_at: Date | null;
+  m_edited_at: Date | null;
+  m_deleted_at: Date | null;
 };
 
 const latestOf = (r: LatestColumns): Message | null =>
@@ -52,6 +73,8 @@ const latestOf = (r: LatestColumns): Message | null =>
         client_id: r.m_client_id,
         body: r.m_body,
         created_at: r.m_created_at,
+        edited_at: r.m_edited_at,
+        deleted_at: r.m_deleted_at,
       })
     : null;
 
@@ -182,9 +205,62 @@ export async function history(
   await assertMember(userId, conversationId);
   // One extra row tells whether another page exists, without a count query.
   const rows = await q.messagePage(conversationId, HISTORY_LIMIT + 1, cursor);
-  const page = rows.slice(0, HISTORY_LIMIT).map(toMessage);
+  const page = await withReactions(rows.slice(0, HISTORY_LIMIT));
   return {
     messages: cursor.after ? page : page.reverse(),
     hasMore: rows.length > HISTORY_LIMIT,
   };
+}
+
+/**
+ * The message, if the caller may see it. Unknown ids and other people's conversations share one
+ * 404, like assertMember.
+ */
+async function visibleMessage(userId: string, messageId: string): Promise<MessageRow> {
+  const row = await q.findMessage(messageId);
+  if (!row) throw new AppError('not_found', 404);
+  await assertMember(userId, row.conversation_id);
+  return row;
+}
+
+const one = async (row: MessageRow) => (await withReactions([row]))[0] as Message;
+
+/** `changed` is false when nothing moved (same text, a repeat): the caller must not broadcast. */
+type ActionResult = { message: Message; changed: boolean };
+
+export async function editMessage(userId: string, p: MessageEditPayload): Promise<ActionResult> {
+  takeSendSlot(userId);
+  const row = await visibleMessage(userId, p.messageId);
+  if (row.sender_id !== userId) throw new AppError('forbidden', 403);
+  if (row.deleted_at) throw new AppError('not_found', 404);
+  if (row.body === p.body) return { message: await one(row), changed: false };
+  const updated = await q.editMessage(p.messageId, userId, p.body);
+  if (!updated) throw new AppError('not_found', 404); // deleted in between
+  return { message: await one(updated), changed: true };
+}
+
+export async function deleteMessage(
+  userId: string,
+  p: MessageDeletePayload,
+): Promise<ActionResult> {
+  takeSendSlot(userId);
+  const row = await visibleMessage(userId, p.messageId);
+  if (row.sender_id !== userId) throw new AppError('forbidden', 403);
+  // A retry of a delete that already landed: answer the same, broadcast nothing.
+  if (row.deleted_at) return { message: toMessage(row), changed: false };
+  const deleted = await q.deleteMessage(p.messageId, userId);
+  // The DB clock decides the window: past it, the guarded UPDATE matched nothing.
+  if (!deleted) throw new AppError('too_late', 403);
+  return { message: toMessage(deleted), changed: true };
+}
+
+export async function reactToMessage(
+  userId: string,
+  p: MessageReactPayload,
+): Promise<ActionResult> {
+  takeSendSlot(userId);
+  const row = await visibleMessage(userId, p.messageId);
+  if (row.deleted_at) throw new AppError('not_found', 404);
+  const changed = await q.setReaction(p.messageId, userId, p.emoji, p.on);
+  return { message: await one(row), changed };
 }

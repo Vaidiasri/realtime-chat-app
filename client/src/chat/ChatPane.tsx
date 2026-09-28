@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DirectSummary, MessageSendPayload, UserSummary } from '@chat/shared';
-import type { SendResult } from '../socket';
+import {
+  DELETE_WINDOW_MS,
+  REACTIONS,
+  type DirectSummary,
+  type MessageSendPayload,
+  type UserSummary,
+} from '@chat/shared';
+import type { ActionResult, MessageAction, SendResult } from '../socket';
 import {
   covers,
   describeError,
@@ -20,6 +26,7 @@ interface Props {
   conversationId: string;
   me: UserSummary;
   send: (payload: MessageSendPayload) => Promise<SendResult>;
+  act: (a: MessageAction) => Promise<ActionResult>;
   typers: string[];
   onTyping: (conversationId: string, on: boolean) => void;
   onRead: (conversationId: string, messageId: string, kind: 'read') => void;
@@ -63,6 +70,7 @@ export function ChatPane({
   conversationId,
   me,
   send,
+  act,
   typers,
   onTyping,
   onRead,
@@ -78,6 +86,7 @@ export function ChatPane({
     convo?.type === 'direct'
       ? convo.peer.displayName
       : (group.data?.members.find((m) => m.userId === id)?.displayName ?? 'Former member');
+  const senderNameOrYou = (id: string) => (id === me.id ? 'You' : senderName(id));
   const messages = useQuery({
     queryKey: keys.messages(conversationId),
     queryFn: () => fetchMessages(qc, conversationId),
@@ -85,6 +94,26 @@ export function ChatPane({
     staleTime: Infinity,
   });
   const [draft, setDraft] = useState('');
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [picker, setPicker] = useState<string | null>(null); // message id with the emoji row open
+  const [actionError, setActionError] = useState('');
+
+  // The server rule decides; the ack carries the message as it now stands.
+  const run = async (a: MessageAction) => {
+    setActionError('');
+    const ack = await act(a);
+    if (ack.ok) putMessage(qc, ack.message);
+    else setActionError(describeError(new Error(ack.error)));
+    return ack.ok;
+  };
+  const saveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    const body = editing?.text.trim();
+    if (!editing || !body) return;
+    if (await run({ event: 'message:edit', payload: { messageId: editing.id, body } })) {
+      setEditing(null);
+    }
+  };
   // The last seen line is relative, so it renders again every minute.
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -229,6 +258,9 @@ export function ChatPane({
       clientId,
       body,
       createdAt: new Date().toISOString(),
+      editedAt: null,
+      deletedAt: null,
+      reactions: [],
     });
   };
 
@@ -311,18 +343,155 @@ export function ChatPane({
             </li>
             {list.map((m) => {
               const mine = m.senderId === me.id;
+              const live = !m.status && !m.deletedAt;
+              const canDelete = mine && now - Date.parse(m.createdAt) < DELETE_WINDOW_MS;
               return (
-                <li key={m.clientId + m.senderId} className={mine ? 'self-end' : 'self-start'}>
+                <li
+                  key={m.clientId + m.senderId}
+                  className={`group ${mine ? 'self-end' : 'self-start'}`}
+                >
                   <div className="mb-0.5 text-xs text-slate-500">
                     {mine ? 'You' : senderName(m.senderId)} · {formatTime(m.createdAt)}
+                    {m.editedAt && !m.deletedAt && ' · edited'}
                   </div>
-                  <p
-                    className={`max-w-[80vw] rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${
-                      mine ? 'bg-slate-900 text-white' : 'bg-white shadow-sm'
-                    } ${m.status ? 'opacity-70' : ''}`}
-                  >
-                    {m.body}
-                  </p>
+                  {editing?.id === m.id ? (
+                    <form onSubmit={(e) => void saveEdit(e)} className="flex gap-2">
+                      <label htmlFor={`edit-${m.id}`} className="sr-only">
+                        Edit message
+                      </label>
+                      <input
+                        id={`edit-${m.id}`}
+                        autoFocus
+                        value={editing.text}
+                        maxLength={4000}
+                        onChange={(e) => setEditing({ id: m.id, text: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                        className="min-w-0 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none md:w-80"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!editing.text.trim()}
+                        className="rounded-md bg-slate-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(null)}
+                        className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : m.deletedAt ? (
+                    <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 italic">
+                      This message was deleted
+                    </p>
+                  ) : (
+                    <p
+                      className={`max-w-[80vw] rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${
+                        mine ? 'bg-slate-900 text-white' : 'bg-white shadow-sm'
+                      } ${m.status ? 'opacity-70' : ''}`}
+                    >
+                      {m.body}
+                    </p>
+                  )}
+                  {live && m.reactions.length > 0 && (
+                    <div className={`mt-1 flex flex-wrap gap-1 ${mine ? 'justify-end' : ''}`}>
+                      {m.reactions.map((r) => {
+                        const on = r.userIds.includes(me.id);
+                        return (
+                          <button
+                            key={r.emoji}
+                            type="button"
+                            aria-pressed={on}
+                            aria-label={`${r.emoji} ${r.userIds.length}, ${on ? 'remove yours' : 'add yours'}`}
+                            title={r.userIds.map(senderNameOrYou).join(', ')}
+                            onClick={() =>
+                              void run({
+                                event: 'message:react',
+                                payload: {
+                                  messageId: m.id,
+                                  emoji: r.emoji as (typeof REACTIONS)[number],
+                                  on: !on,
+                                },
+                              })
+                            }
+                            className={`rounded-full border px-2 text-sm ${
+                              on ? 'border-sky-600 bg-sky-50' : 'border-slate-300 bg-white'
+                            }`}
+                          >
+                            {r.emoji} {r.userIds.length}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {live && editing?.id !== m.id && (
+                    <div
+                      className={`mt-0.5 flex flex-wrap gap-2 text-xs text-slate-500 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 ${
+                        mine ? 'justify-end' : ''
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={picker === m.id}
+                        onClick={() => setPicker(picker === m.id ? null : m.id)}
+                        className="underline"
+                      >
+                        React
+                      </button>
+                      {mine && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPicker(null);
+                            setEditing({ id: m.id, text: m.body });
+                          }}
+                          className="underline"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Delete this message for everyone?')) {
+                              void run({ event: 'message:delete', payload: { messageId: m.id } });
+                            }
+                          }}
+                          className="text-red-700 underline"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {live && picker === m.id && (
+                    <div
+                      role="group"
+                      aria-label="Add a reaction"
+                      className={`mt-1 flex gap-1 ${mine ? 'justify-end' : ''}`}
+                    >
+                      {REACTIONS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            setPicker(null);
+                            void run({
+                              event: 'message:react',
+                              payload: { messageId: m.id, emoji, on: true },
+                            });
+                          }}
+                          className="rounded-md border border-slate-300 bg-white px-1.5 text-lg"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {mine && !m.status && receipt(m.id)}
                   {m.status === 'sending' && (
                     <div className="mt-0.5 text-right text-xs text-slate-500">Sending...</div>
@@ -348,6 +517,14 @@ export function ChatPane({
           </ul>
         )}
       </div>
+      {actionError && (
+        <p role="alert" className="flex items-center gap-2 px-3 text-xs text-red-700">
+          {actionError}
+          <button type="button" onClick={() => setActionError('')} className="underline">
+            Dismiss
+          </button>
+        </p>
+      )}
       <p role="status" className="h-5 shrink-0 truncate px-3 text-xs text-slate-500 italic">
         {typingText(typers.map(senderName))}
       </p>

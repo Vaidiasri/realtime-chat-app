@@ -180,7 +180,11 @@ export function putReceipt(qc: QueryClient, r: ReceiptUpdate, meId: string) {
   qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
     list?.map((c) => {
       if (c.id !== r.conversationId) return c;
-      if (r.userId === meId) return r.lastReadId ? { ...c, unreadCount: 0 } : c;
+      // A delivered mark carries the old read mark too, so clear only once read reaches the newest.
+      if (r.userId === meId)
+        return !c.latestMessage || covers(r.lastReadId, c.latestMessage.id)
+          ? { ...c, unreadCount: 0 }
+          : c;
       return c.type === 'direct' && c.peer.id === r.userId
         ? { ...c, peer: { ...c.peer, ...marks } }
         : c;

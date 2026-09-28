@@ -57,6 +57,26 @@ export async function apiFetch<T>(path: string, init: { method?: string; body?: 
   return { status: res.status, data: data as T };
 }
 
+/** A raw call with the Bearer token and the same one refresh retry, for files. */
+export async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const call = () =>
+    fetch(path, {
+      ...init,
+      headers: {
+        ...(init.headers as Record<string, string> | undefined),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+    });
+  let res = await call().catch(() => undefined);
+  if (res?.status === 401 && (await refreshSession())) res = await call().catch(() => undefined);
+  if (!res) throw new Error('network');
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({ error: 'internal' }))) as ApiError;
+    throw new Error(err.error);
+  }
+  return res;
+}
+
 let inflight: Promise<AuthResponse | null> | null = null;
 
 /** One refresh at a time per tab: callers racing each other share the same request. */

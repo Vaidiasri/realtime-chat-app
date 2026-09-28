@@ -74,6 +74,18 @@ export interface ReactionsTable {
   created_at: Timestamp;
 }
 
+export interface AttachmentsTable {
+  id: Generated<string>;
+  conversation_id: string;
+  uploader_id: string;
+  message_id: MessageRef;
+  name: string;
+  mime: string;
+  size: number;
+  data: Buffer;
+  created_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   refresh_tokens: RefreshTokensTable;
@@ -81,6 +93,7 @@ export interface Database {
   memberships: MembershipsTable;
   messages: MessagesTable;
   reactions: ReactionsTable;
+  attachments: AttachmentsTable;
 }
 
 export const db = new Kysely<Database>({

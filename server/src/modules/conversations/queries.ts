@@ -1,5 +1,6 @@
 import { sql } from 'kysely';
 import { db } from '../../db/index.js';
+import { AppError } from '../../errors.js';
 
 const messageColumns = [
   'id',
@@ -37,27 +38,44 @@ export const isMember = async (userId: string, conversationId: string) =>
     .executeTakeFirst()) !== undefined;
 
 // The (sender_id, client_id) UNIQUE constraint decides idempotency: a retry returns the stored row.
-export const insertMessage = async (
+// A new message claims its upload in the same transaction; a claim that matches nothing (someone
+// else's file, another conversation, already sent) rolls the message back.
+export const insertMessage = (
   senderId: string,
   conversationId: string,
   clientId: string,
   body: string,
-) => {
-  const inserted = await db
-    .insertInto('messages')
-    .values({ conversation_id: conversationId, sender_id: senderId, client_id: clientId, body })
-    .onConflict((oc) => oc.columns(['sender_id', 'client_id']).doNothing())
-    .returning(messageColumns)
-    .executeTakeFirst();
-  if (inserted) return { row: inserted, created: true };
-  const row = await db
-    .selectFrom('messages')
-    .select(messageColumns)
-    .where('sender_id', '=', senderId)
-    .where('client_id', '=', clientId)
-    .executeTakeFirstOrThrow();
-  return { row, created: false };
-};
+  attachmentId?: string,
+) =>
+  db.transaction().execute(async (trx) => {
+    const inserted = await trx
+      .insertInto('messages')
+      .values({ conversation_id: conversationId, sender_id: senderId, client_id: clientId, body })
+      .onConflict((oc) => oc.columns(['sender_id', 'client_id']).doNothing())
+      .returning(messageColumns)
+      .executeTakeFirst();
+    if (!inserted) {
+      const row = await trx
+        .selectFrom('messages')
+        .select(messageColumns)
+        .where('sender_id', '=', senderId)
+        .where('client_id', '=', clientId)
+        .executeTakeFirstOrThrow();
+      return { row, created: false };
+    }
+    if (attachmentId) {
+      const claimed = await trx
+        .updateTable('attachments')
+        .set({ message_id: inserted.id })
+        .where('id', '=', attachmentId)
+        .where('uploader_id', '=', senderId)
+        .where('conversation_id', '=', conversationId)
+        .where('message_id', 'is', null)
+        .executeTakeFirst();
+      if (claimed.numUpdatedRows === 0n) throw new AppError('invalid_input', 400);
+    }
+    return { row: inserted, created: true };
+  });
 
 // One transaction. The direct_key UNIQUE constraint makes concurrent starts create one row:
 // the loser's ON CONFLICT waits for the winner's commit, then selects the winner's id.
@@ -216,7 +234,10 @@ export const deleteMessage = (id: string, senderId: string) =>
       .where('created_at', '>', sql<Date>`now() - interval '10 minutes'`)
       .returning(messageColumns)
       .executeTakeFirst();
-    if (row) await trx.deleteFrom('reactions').where('message_id', '=', id).execute();
+    if (row) {
+      await trx.deleteFrom('reactions').where('message_id', '=', id).execute();
+      await trx.deleteFrom('attachments').where('message_id', '=', id).execute();
+    }
     return row;
   });
 
@@ -261,4 +282,14 @@ export const reactionsFor = (messageIds: readonly string[]) =>
         .where('message_id', 'in', messageIds)
         .groupBy(['message_id', 'emoji'])
         .orderBy(sql`min(created_at)`)
+        .execute();
+
+/** File details (never the bytes) for a set of messages. */
+export const attachmentsFor = (messageIds: readonly string[]) =>
+  messageIds.length === 0
+    ? Promise.resolve([])
+    : db
+        .selectFrom('attachments')
+        .select(['id', 'message_id', 'name', 'mime', 'size'])
+        .where('message_id', 'in', messageIds)
         .execute();

@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TYPES,
   DELETE_WINDOW_MS,
   REACTIONS,
+  type Attachment,
+  type AttachmentResponse,
   type DirectSummary,
   type MessageSendPayload,
   type UserSummary,
 } from '@chat/shared';
+import { authedFetch } from '../api';
 import type { ActionResult, MessageAction, SendResult } from '../socket';
+import { AttachmentView } from './Attachment';
 import {
   covers,
   describeError,
@@ -94,6 +100,7 @@ export function ChatPane({
     staleTime: Infinity,
   });
   const [draft, setDraft] = useState('');
+  const [fileError, setFileError] = useState('');
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [picker, setPicker] = useState<string | null>(null); // message id with the emoji row open
   const [actionError, setActionError] = useState('');
@@ -239,15 +246,13 @@ export function ChatPane({
     const ack = await send({
       conversationId: m.conversationId,
       clientId: m.clientId,
-      body: m.body,
+      body: m.body ?? '',
+      attachmentId: m.attachment?.id,
     });
     putMessage(qc, ack.ok ? ack.message : { ...m, status: 'failed', error: ack.error });
   };
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const body = draft.trim();
-    if (!body) return;
+  const post = (body: string, attachment: Attachment | null) => {
     setDraft('');
     stopTyping();
     const clientId = crypto.randomUUID();
@@ -261,7 +266,35 @@ export function ChatPane({
       editedAt: null,
       deletedAt: null,
       reactions: [],
+      attachment,
     });
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const body = draft.trim();
+    if (body) post(body, null);
+  };
+
+  // Uploads first, then sends the message that claims it, with the draft as its caption.
+  // The server checks type and size again; these checks only save a doomed upload.
+  const attach = async (file: File) => {
+    setFileError('');
+    if (!(ATTACHMENT_TYPES as readonly string[]).includes(file.type)) {
+      return setFileError(describeError(new Error('unsupported_type')));
+    }
+    if (file.size === 0 || file.size > ATTACHMENT_MAX_BYTES) {
+      return setFileError(describeError(new Error('too_large')));
+    }
+    try {
+      const res = await authedFetch(
+        `/api/conversations/${conversationId}/attachments?name=${encodeURIComponent(file.name)}`,
+        { method: 'POST', headers: { 'Content-Type': file.type }, body: file },
+      );
+      post(draft.trim(), ((await res.json()) as AttachmentResponse).attachment);
+    } catch (e) {
+      setFileError(describeError(e));
+    }
   };
 
   return (
@@ -388,13 +421,16 @@ export function ChatPane({
                       This message was deleted
                     </p>
                   ) : (
-                    <p
-                      className={`max-w-[80vw] rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${
+                    <div
+                      className={`max-w-[80vw] space-y-2 rounded-lg px-3 py-2 break-words whitespace-pre-wrap md:max-w-md ${
                         mine ? 'bg-slate-900 text-white' : 'bg-white shadow-sm'
                       } ${m.status ? 'opacity-70' : ''}`}
                     >
-                      {m.body}
-                    </p>
+                      {m.attachment && (
+                        <AttachmentView conversationId={conversationId} file={m.attachment} />
+                      )}
+                      {m.body && <p>{m.body}</p>}
+                    </div>
                   )}
                   {live && m.reactions.length > 0 && (
                     <div className={`mt-1 flex flex-wrap gap-1 ${mine ? 'justify-end' : ''}`}>
@@ -528,7 +564,25 @@ export function ChatPane({
       <p role="status" className="h-5 shrink-0 truncate px-3 text-xs text-slate-500 italic">
         {typingText(typers.map(senderName))}
       </p>
+      {fileError && (
+        <p role="alert" className="bg-red-50 px-3 py-1 text-sm text-red-700">
+          {fileError}
+        </p>
+      )}
       <form onSubmit={submit} className="flex gap-2 border-t border-slate-200 bg-white p-3">
+        <label className="flex cursor-pointer items-center rounded-md border border-slate-300 px-3 py-2 text-sm font-medium focus-within:border-slate-900">
+          Attach
+          <input
+            type="file"
+            accept={ATTACHMENT_TYPES.join(',')}
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void attach(file);
+            }}
+          />
+        </label>
         <label htmlFor="composer" className="sr-only">
           Message
         </label>

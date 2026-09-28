@@ -9,6 +9,8 @@ const schema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
   // Loads the six demo users, two groups and some DMs on boot, once.
   SEED_DEMO: z.stringbool().default(false),
+  // Proxy hops in front of the app (1 on Render). 0 trusts none, so X-Forwarded-For is ignored.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 });
 
 const parsed = schema.safeParse(process.env);

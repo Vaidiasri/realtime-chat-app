@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { pinoHttp } from 'pino-http';
 import { sql } from 'kysely';
 import type { HealthResponse } from '@chat/shared';
+import { config } from './config.js';
 import { db } from './db/index.js';
 import { logger } from './logger.js';
 import { AppError } from './errors.js';
@@ -21,6 +22,8 @@ const clientDist = path.resolve(import.meta.dirname, '../../client/dist');
 export function createApp(io: AppServer): express.Express {
   const app = express();
   app.disable('x-powered-by');
+  // Rate limits key on req.ip, which is the proxy's address unless its hop is trusted.
+  app.set('trust proxy', config.TRUST_PROXY);
   // Group avatars are https URLs shown only as <img src>; every other directive keeps its default.
   app.use(
     helmet({

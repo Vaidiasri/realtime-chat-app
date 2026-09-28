@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MessageSendPayload, UserSummary } from '@chat/shared';
 import type { SendResult } from '../socket';
-import { fetchMessages, keys, putMessage, useConversations, type ChatMessage } from './cache';
+import {
+  describeError,
+  fetchMessages,
+  keys,
+  loadOlder,
+  putMessage,
+  useConversations,
+  type ChatMessage,
+} from './cache';
 import { formatTime } from './Sidebar';
 
 interface Props {
@@ -28,14 +36,54 @@ export function ChatPane({ conversationId, me, send, onBack }: Props) {
   const messages = useQuery({
     queryKey: keys.messages(conversationId),
     queryFn: () => fetchMessages(qc, conversationId),
+    // Never refetch on its own: that would drop loaded older pages. Sockets and syncAll keep it fresh.
+    staleTime: Infinity,
   });
   const [draft, setDraft] = useState('');
+  const [older, setOlder] = useState('idle'); // 'idle', 'loading', or an error text;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLLIElement>(null);
   const endRef = useRef<HTMLLIElement>(null);
-  const count = messages.data?.length ?? 0;
+  const anchor = useRef<number | null>(null);
+  const list = messages.data?.messages ?? [];
+  const count = list.length;
+  const hasMore = messages.data?.hasMore ?? false;
+  const first = list[0];
+  const last = list.at(-1);
+  const firstKey = first && first.senderId + first.clientId;
+  const lastKey = last && last.senderId + last.clientId;
 
+  // An older page landed on top: shift by its height so the message you were reading stays put.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && anchor.current !== null) el.scrollTop += el.scrollHeight - anchor.current;
+    anchor.current = null;
+  }, [firstKey]);
+
+  // A new message at the bottom (or the first load): follow it.
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
-  }, [count]);
+  }, [lastKey]);
+
+  // Re-created after every load, so a sentinel that is still visible triggers the next page.
+  useEffect(() => {
+    const top = topRef.current;
+    if (!top || !hasMore || older !== 'idle') return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting || !scrollRef.current) return;
+        anchor.current = scrollRef.current.scrollHeight;
+        setOlder('loading');
+        loadOlder(qc, conversationId).then(
+          () => setOlder('idle'),
+          (e: unknown) => setOlder(describeError(e)),
+        );
+      },
+      { root: scrollRef.current },
+    );
+    io.observe(top);
+    return () => io.disconnect();
+  }, [qc, conversationId, hasMore, older, count]);
 
   const deliver = async (m: ChatMessage) => {
     putMessage(qc, { ...m, status: 'sending', error: undefined });
@@ -75,7 +123,7 @@ export function ChatPane({ conversationId, me, send, onBack }: Props) {
         </button>
         <h2 className="truncate font-semibold">{peer?.displayName ?? 'Conversation'}</h2>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">
         {messages.isPending ? (
           <p className="text-sm text-slate-500">Loading messages...</p>
         ) : messages.isError ? (
@@ -93,7 +141,25 @@ export function ChatPane({ conversationId, me, send, onBack }: Props) {
           <p className="text-sm text-slate-500">No messages yet. Say hello.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {messages.data.map((m) => {
+            <li ref={topRef} className="self-center text-xs text-slate-500">
+              {!hasMore ? (
+                'Start of conversation'
+              ) : older === 'loading' || older === 'idle' ? (
+                'Loading older...'
+              ) : (
+                <span className="text-red-700">
+                  {older}{' '}
+                  <button
+                    type="button"
+                    onClick={() => setOlder('idle')}
+                    className="font-medium underline"
+                  >
+                    Retry
+                  </button>
+                </span>
+              )}
+            </li>
+            {list.map((m) => {
               const mine = m.senderId === me.id;
               return (
                 <li key={m.clientId + m.senderId} className={mine ? 'self-end' : 'self-start'}>

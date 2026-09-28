@@ -4,23 +4,30 @@ import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
 import { connectSocket, sendMessage, type AppSocket, type SendResult } from '../socket';
 import type { MessageSendPayload } from '@chat/shared';
-import { keys, putConversation, putMessage } from './cache';
+import { putConversation, putMessage, syncAll } from './cache';
 import { ChatPane } from './ChatPane';
 import { Sidebar } from './Sidebar';
 
 export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () => void }) {
   const qc = useQueryClient();
-  const [connected, setConnected] = useState(false);
+  // connecting: before the first connect. reconnecting: dropped, or back but still syncing.
+  const [link, setLink] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
   const [openId, setOpenId] = useState<string | null>(null);
   const socketRef = useRef<{ socket: AppSocket; stop: () => void }>(undefined);
 
   useEffect(() => {
-    const conn = connectSocket({ status: setConnected, signedOut: onSignedOut });
-    // ponytail: refetch on every (re)connect as a cheap self heal; feature 7 adds gap free sync.
+    const conn = connectSocket({
+      status: (up) => {
+        if (!up) setLink((l) => (l === 'connecting' ? l : 'reconnecting'));
+      },
+      signedOut: onSignedOut,
+    });
     const { socket } = conn;
+    // Every connect fills the gap since the last one; the banner stays up until that is done.
     socket.on('connect', () => {
-      void qc.invalidateQueries({ queryKey: keys.conversations });
-      void qc.invalidateQueries({ queryKey: ['messages'] });
+      void syncAll(qc).finally(() => {
+        if (socket.connected) setLink('live');
+      });
     });
     socket.on('message:new', (m) => putMessage(qc, m));
     socket.on('conversation:new', (c) => putConversation(qc, c));
@@ -46,11 +53,8 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
       <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-2">
         <span className="truncate font-medium">{me.displayName}</span>
         <div className="flex shrink-0 items-center gap-3">
-          <span
-            role="status"
-            className={`text-sm ${connected ? 'text-green-700' : 'text-amber-700'}`}
-          >
-            {connected ? 'Connected' : 'Connecting...'}
+          <span className={`text-sm ${link === 'live' ? 'text-green-700' : 'text-amber-700'}`}>
+            {link === 'live' ? 'Connected' : link === 'connecting' ? 'Connecting...' : 'Offline'}
           </span>
           <button
             type="button"
@@ -61,6 +65,13 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
           </button>
         </div>
       </header>
+      <div role="status" className="empty:hidden">
+        {link === 'reconnecting' && (
+          <p className="bg-amber-100 px-4 py-1 text-center text-sm font-medium text-amber-900">
+            Reconnecting...
+          </p>
+        )}
+      </div>
       <div className="flex min-h-0 flex-1">
         <aside
           className={`${open ? 'hidden md:flex' : 'flex'} w-full flex-col border-r border-slate-200 bg-white md:w-80`}

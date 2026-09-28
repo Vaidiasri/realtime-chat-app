@@ -508,6 +508,9 @@ export function ChatPane({
                     <div
                       role="group"
                       aria-label="Add a reaction"
+                      // Near the bottom the row opens below the fold; bring it into view.
+                      ref={(el) => el?.scrollIntoView({ block: 'nearest' })}
+                      onKeyDown={(e) => e.key === 'Escape' && setPicker(null)}
                       className={`mt-1 flex gap-1 ${mine ? 'justify-end' : ''}`}
                     >
                       {REACTIONS.map((emoji) => (

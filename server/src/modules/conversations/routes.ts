@@ -1,5 +1,5 @@
 import express from 'express';
-import { conversationIdParam, startDirectBody } from '@chat/shared';
+import { conversationIdParam, historyQuery, startDirectBody } from '@chat/shared';
 import { AppError } from '../../errors.js';
 import { parse, userOf } from '../../http.js';
 import type { AppServer } from '../../io.js';
@@ -33,7 +33,8 @@ export function conversationsRouter(io: AppServer): express.Router {
   // A malformed id is a 404 like any other id the caller cannot see.
   router.get('/:id/messages', async (req, res) => {
     const { id } = parse(conversationIdParam, req.params, new AppError('not_found', 404));
-    res.json({ messages: await conversations.history(userOf(req).id, id) });
+    const cursor = parse(historyQuery, req.query);
+    res.json(await conversations.history(userOf(req).id, id, cursor));
   });
 
   return router;

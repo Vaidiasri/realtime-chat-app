@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ConversationResponse, UsersResponse } from '@chat/shared';
+import type { ConversationResponse, ConversationSummary, UsersResponse } from '@chat/shared';
 import { Search, SquarePen } from 'lucide-react';
 import { Avatar as AvatarRoot, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -57,9 +57,7 @@ export function Sidebar({ openId, onOpen }: Props) {
     }
   };
 
-  const sorted = [...(conversations.data ?? [])].sort((a, b) =>
-    activity(b).localeCompare(activity(a)),
-  );
+  const sorted = byActivity(conversations.data);
 
   return (
     <>
@@ -215,6 +213,56 @@ export function Sidebar({ openId, onOpen }: Props) {
         />
       )}
     </>
+  );
+}
+
+const byActivity = (list: readonly ConversationSummary[] | undefined) =>
+  [...(list ?? [])].sort((a, b) => activity(b).localeCompare(activity(a)));
+
+/** The collapsed sidebar: recent conversations as avatars, newest first. */
+export function RailList({ openId, onOpen }: Props) {
+  const conversations = useConversations();
+  return (
+    <ul className="flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto py-1">
+      {byActivity(conversations.data).map((c) => (
+        <li key={c.id}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => onOpen(c.id)}
+                aria-current={c.id === openId ? 'true' : undefined}
+                aria-label={
+                  c.unreadCount > 0 ? `${titleOf(c)}, ${c.unreadCount} unread` : titleOf(c)
+                }
+                className="relative flex rounded-full p-0.5 ring-2 ring-transparent transition-shadow hover:ring-border focus-visible:ring-ring/50 focus-visible:outline-none aria-[current]:ring-primary"
+              >
+                <Avatar
+                  key={c.type === 'group' ? c.avatarUrl : null}
+                  name={titleOf(c)}
+                  url={c.type === 'group' ? c.avatarUrl : null}
+                />
+                {c.type === 'direct' && c.peer.online && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-0.5 bottom-0.5 size-2.5 rounded-full bg-success ring-2 ring-background"
+                  />
+                )}
+                {c.unreadCount > 0 && (
+                  <Badge
+                    aria-hidden="true"
+                    className="absolute -top-1 -right-1 h-4.5 min-w-4.5 px-1 text-[10px] tabular-nums"
+                  >
+                    {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                  </Badge>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{titleOf(c)}</TooltipContent>
+          </Tooltip>
+        </li>
+      ))}
+    </ul>
   );
 }
 

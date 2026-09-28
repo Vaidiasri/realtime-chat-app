@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
-import { LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, SunMoon } from 'lucide-react';
+import { LogOut, MessageCircle, ChevronLeft, SunMoon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -52,7 +52,7 @@ import {
 } from './cache';
 import { ChatPane } from './ChatPane';
 import { GroupPanel } from './GroupPanel';
-import { Avatar, Sidebar } from './Sidebar';
+import { Avatar, RailList, Sidebar } from './Sidebar';
 
 const TYPING_TTL_MS = 6_000;
 
@@ -250,6 +250,21 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     </DropdownMenu>
   );
 
+  // Sits on the sidebar's right border; md and up only.
+  const edgeToggle = (
+    <button
+      type="button"
+      onClick={() => collapse(!collapsed)}
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-expanded={!collapsed}
+      className="absolute top-1/2 -right-3 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none md:flex"
+    >
+      <ChevronLeft
+        className={`size-3.5 transition-transform duration-300 motion-reduce:transition-none ${collapsed ? 'rotate-180' : ''}`}
+      />
+    </button>
+  );
+
   const open = openId !== null;
   return (
     <div className="flex h-dvh bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -272,49 +287,36 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
           </p>
         )}
       </div>
+      {/* One aside whose width slides between rail and full; the inner wrapper clips while it moves. */}
       <aside
-        className={`${open ? 'hidden md:flex' : 'flex'} ${collapsed ? 'md:hidden' : ''} w-full flex-col border-r bg-muted/40 md:w-72 lg:w-80 dark:bg-card/40`}
+        className={`${open ? 'hidden md:flex' : 'flex'} ${collapsed ? 'md:w-18' : 'md:w-72 lg:w-80'} relative w-full shrink-0 border-r bg-muted/40 ease-[cubic-bezier(0.22,1,0.36,1)] md:transition-[width] md:duration-300 motion-reduce:transition-none dark:bg-card/40`}
       >
-        <header className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
-          <span className="flex items-center gap-2.5">
-            <Logo />
-            <span className="font-semibold tracking-tight">Chat</span>
-          </span>
-          <span className="flex items-center gap-1">
-            {account(false)}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => collapse(true)}
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-              className="hidden text-muted-foreground md:inline-flex"
-            >
-              <PanelLeftClose />
-            </Button>
-          </span>
-        </header>
-        <Sidebar openId={openId} onOpen={openConversation} />
-      </aside>
-      {collapsed && (
-        <nav
-          aria-label="Collapsed sidebar"
-          className="hidden w-16 shrink-0 flex-col items-center gap-2 border-r bg-muted/40 py-3 md:flex dark:bg-card/40"
-        >
-          <Logo />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => collapse(false)}
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
-            className="mt-2 text-muted-foreground"
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div
+            className={`${collapsed ? 'md:hidden' : ''} flex w-full shrink-0 flex-col duration-300 animate-in fade-in md:w-72 lg:w-80 motion-reduce:animate-none`}
           >
-            <PanelLeftOpen />
-          </Button>
-          <span className="mt-auto">{account(true)}</span>
-        </nav>
-      )}
+            <header className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+              <span className="flex items-center gap-2.5">
+                <Logo />
+                <span className="font-semibold tracking-tight">Chat</span>
+              </span>
+              {account(false)}
+            </header>
+            <Sidebar openId={openId} onOpen={openConversation} />
+          </div>
+          {collapsed && (
+            <nav
+              aria-label="Collapsed sidebar"
+              className="hidden w-18 shrink-0 flex-col items-center gap-2 py-3 duration-300 animate-in fade-in md:flex motion-reduce:animate-none"
+            >
+              <Logo className="mb-2" />
+              <RailList openId={openId} onOpen={openConversation} />
+              {account(true)}
+            </nav>
+          )}
+        </div>
+        {edgeToggle}
+      </aside>
       <div className="flex min-h-0 min-w-0 flex-1">
         <section className={`${open ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
           {openId ? (

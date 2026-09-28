@@ -7,13 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo } from './icons';
 
-const Brand = () => (
-  <div className="flex items-center gap-3">
-    <Logo />
-    <span className="text-lg font-semibold tracking-tight">Chat</span>
-  </div>
-);
-
 type Mode = 'login' | 'signup';
 type Field = 'email' | 'password' | 'displayName';
 
@@ -88,9 +81,12 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
   const isSignup = mode === 'signup';
   return (
     <main className="flex h-full flex-col items-center justify-center overflow-y-auto bg-[radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)] px-4 py-8">
-      <Brand />
-      <Card className="mt-8 w-full max-w-sm py-7 shadow-xl shadow-primary/5 [--card-spacing:--spacing(7)]">
-        <CardHeader>
+      <Card className="w-full max-w-sm py-7 shadow-xl shadow-primary/5 [--card-spacing:--spacing(7)]">
+        <CardHeader className="justify-items-center text-center">
+          <div className="mb-4 flex flex-col items-center gap-2.5">
+            <Logo className="size-11 rounded-xl" />
+            <span className="text-sm font-semibold tracking-tight text-muted-foreground">Chat</span>
+          </div>
           <CardTitle className="text-xl font-semibold tracking-tight">
             <h1>{isSignup ? 'Create an account' : 'Log in'}</h1>
           </CardTitle>

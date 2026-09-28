@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
-import { LogOut, MessageCircle, SunMoon } from 'lucide-react';
+import { LogOut, MessageCircle, PanelLeftClose, PanelLeftOpen, SunMoon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Logo } from '../icons';
+
+const readCollapsed = () => {
+  try {
+    return localStorage.getItem('sidebar') === 'collapsed';
+  } catch {
+    return false;
+  }
+};
 
 const toggleTheme = () => {
   const dark = document.documentElement.classList.toggle('dark');
@@ -66,6 +74,16 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
   const [openId, setOpenId] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const [notice, setNotice] = useState('');
+  // Only md and up: below that the list and the chat already swap places.
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const collapse = (next: boolean) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem('sidebar', next ? 'collapsed' : 'open');
+    } catch {
+      // Storage blocked: the choice lasts for this page.
+    }
+  };
   // The socket handlers are bound once; they read the open pane through this ref.
   const openRef = useRef(openId);
   useEffect(() => {
@@ -188,6 +206,50 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     });
   }, []);
 
+  const account = (compact: boolean) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className={compact ? 'size-10 rounded-full p-0' : 'h-9 gap-2 rounded-full pr-1 pl-3'}
+          aria-label={`Account, ${link === 'live' ? 'connected' : link === 'connecting' ? 'connecting' : 'offline'}`}
+        >
+          {!compact && (
+            <span className="max-w-28 truncate text-sm font-medium">{me.displayName}</span>
+          )}
+          <span className="relative">
+            <Avatar name={me.displayName} url={null} size="default" />
+            <span
+              aria-hidden="true"
+              className={`absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background ${link === 'live' ? 'bg-success' : 'animate-pulse bg-warning'}`}
+            />
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={compact ? 'start' : 'end'}
+        side={compact ? 'right' : 'bottom'}
+        className="w-56"
+      >
+        <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5">
+          <span className="truncate text-sm font-medium text-foreground">{me.displayName}</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {link === 'live' ? 'Connected' : link === 'connecting' ? 'Connecting...' : 'Offline'}
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={toggleTheme}>
+          <SunMoon />
+          Toggle theme
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={() => void signOut()}>
+          <LogOut />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const open = openId !== null;
   return (
     <div className="flex h-dvh bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -211,57 +273,48 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
         )}
       </div>
       <aside
-        className={`${open ? 'hidden md:flex' : 'flex'} w-full flex-col border-r bg-muted/40 md:w-72 lg:w-80 dark:bg-card/40`}
+        className={`${open ? 'hidden md:flex' : 'flex'} ${collapsed ? 'md:hidden' : ''} w-full flex-col border-r bg-muted/40 md:w-72 lg:w-80 dark:bg-card/40`}
       >
         <header className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
           <span className="flex items-center gap-2.5">
             <Logo />
             <span className="font-semibold tracking-tight">Chat</span>
           </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-9 gap-2 rounded-full pr-1 pl-3"
-                aria-label={`Account, ${link === 'live' ? 'connected' : link === 'connecting' ? 'connecting' : 'offline'}`}
-              >
-                <span className="max-w-28 truncate text-sm font-medium">{me.displayName}</span>
-                <span className="relative">
-                  <Avatar name={me.displayName} url={null} size="default" />
-                  <span
-                    aria-hidden="true"
-                    className={`absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-background ${link === 'live' ? 'bg-success' : 'animate-pulse bg-warning'}`}
-                  />
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5">
-                <span className="truncate text-sm font-medium text-foreground">
-                  {me.displayName}
-                </span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {link === 'live'
-                    ? 'Connected'
-                    : link === 'connecting'
-                      ? 'Connecting...'
-                      : 'Offline'}
-                </span>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={toggleTheme}>
-                <SunMoon />
-                Toggle theme
-              </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" onSelect={() => void signOut()}>
-                <LogOut />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <span className="flex items-center gap-1">
+            {account(false)}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => collapse(true)}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              className="hidden text-muted-foreground md:inline-flex"
+            >
+              <PanelLeftClose />
+            </Button>
+          </span>
         </header>
         <Sidebar openId={openId} onOpen={openConversation} />
       </aside>
+      {collapsed && (
+        <nav
+          aria-label="Collapsed sidebar"
+          className="hidden w-16 shrink-0 flex-col items-center gap-2 border-r bg-muted/40 py-3 md:flex dark:bg-card/40"
+        >
+          <Logo />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => collapse(false)}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+            className="mt-2 text-muted-foreground"
+          >
+            <PanelLeftOpen />
+          </Button>
+          <span className="mt-auto">{account(true)}</span>
+        </nav>
+      )}
       <div className="flex min-h-0 min-w-0 flex-1">
         <section className={`${open ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
           {openId ? (

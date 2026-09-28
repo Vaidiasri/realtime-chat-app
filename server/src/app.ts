@@ -9,7 +9,10 @@ import { db } from './db/index.js';
 import { logger } from './logger.js';
 import { AppError } from './errors.js';
 import type { AppServer } from './io.js';
+import { requireAuth } from './http.js';
 import { authRouter } from './modules/auth/routes.js';
+import { conversationsRouter } from './modules/conversations/routes.js';
+import { usersRouter } from './modules/users/routes.js';
 
 const clientDist = path.resolve(import.meta.dirname, '../../client/dist');
 
@@ -33,6 +36,8 @@ export function createApp(io: AppServer): express.Express {
     res.status(body.ok ? 200 : 503).json(body);
   });
   api.use('/auth', authRouter(io));
+  api.use('/users', requireAuth, usersRouter());
+  api.use('/conversations', requireAuth, conversationsRouter(io));
   api.use((_req, res) => {
     res.status(404).json({ error: 'not_found' });
   });

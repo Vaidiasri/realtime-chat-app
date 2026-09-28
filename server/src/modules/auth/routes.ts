@@ -1,10 +1,10 @@
 import express from 'express';
 import type { CookieOptions, RequestHandler, Response } from 'express';
-import { rateLimit, ipKeyGenerator, type Options } from 'express-rate-limit';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { loginBody, signupBody } from '@chat/shared';
-import type { z } from 'zod';
 import { config } from '../../config.js';
 import { AppError } from '../../errors.js';
+import { limited, parse } from '../../http.js';
 import type { AppServer } from '../../io.js';
 import * as auth from './service.js';
 
@@ -14,13 +14,6 @@ const cookieOptions: CookieOptions = {
   sameSite: 'strict',
   path: '/api/auth',
   secure: config.NODE_ENV === 'production',
-};
-
-// The 400 body never carries zod detail; the client runs the same schema for field errors.
-const parse = <T extends z.ZodType>(schema: T, body: unknown): z.infer<T> => {
-  const result = schema.safeParse(body);
-  if (!result.success) throw new AppError('invalid_input', 400);
-  return result.data;
 };
 
 const send = (res: Response, status: number, issued: auth.Issued) => {
@@ -44,19 +37,6 @@ const sameOrigin: RequestHandler = (req, _res, next) => {
     origin !== undefined && URL.canParse(origin) && new URL(origin).host === req.get('host');
   next(ok ? undefined : new AppError('bad_origin', 403));
 };
-
-// ponytail: in memory store, resets on restart and is per instance; use a shared store to scale out.
-const limited = (limit: number, windowMs: number, extra: Partial<Options> = {}) =>
-  rateLimit({
-    windowMs,
-    limit,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    handler: (_req, res) => {
-      res.status(429).json({ error: 'rate_limited' });
-    },
-    ...extra,
-  });
 
 // Only failures count, keyed by IP plus email, so one attacker cannot lock out every account.
 const loginLimit = limited(10, 15 * 60_000, {

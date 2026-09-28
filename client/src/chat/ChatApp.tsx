@@ -2,6 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
+
+const toggleTheme = () => {
+  const dark = document.documentElement.classList.toggle('dark');
+  try {
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  } catch {
+    // Storage blocked: the toggle still works for this page.
+  }
+};
 import {
   connectSocket,
   messageAction,
@@ -177,6 +186,13 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
           <span className={`text-sm ${link === 'live' ? 'text-green-700' : 'text-amber-700'}`}>
             {link === 'live' ? 'Connected' : link === 'connecting' ? 'Connecting...' : 'Offline'}
           </span>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="rounded-md border border-slate-300 px-3 py-1 text-sm font-medium"
+          >
+            Theme
+          </button>
           <button
             type="button"
             onClick={() => void signOut()}

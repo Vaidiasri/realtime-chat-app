@@ -1,1 +1,34 @@
 @import 'tailwindcss';
+
+/*
+ * Dark mode swaps the palette instead of adding dark: variants everywhere. The UI is built on the
+ * slate scale plus white, so mirroring that scale keeps every light/dark pair contrasting
+ * (bg-slate-900 + text-white becomes a light button with dark text). Accents move to their light
+ * tints so red and green text stay readable on a dark background. index.html sets the class
+ * before first paint.
+ */
+.dark {
+  color-scheme: dark;
+  --color-white: #0b1120;
+  --color-slate-50: #0f172a;
+  --color-slate-100: #1e293b;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-red-50: #3b0a0a;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-green-700: #86efac;
+  --color-amber-100: #3b2a06;
+  --color-amber-700: #fcd34d;
+  --color-amber-900: #fef3c7;
+  --color-sky-50: #082f49;
+  --color-sky-600: #7dd3fc;
+}
+
+body {
+  background: var(--color-slate-50);
+}

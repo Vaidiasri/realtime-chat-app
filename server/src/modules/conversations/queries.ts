@@ -103,6 +103,7 @@ export const summaries = (userId: string, conversationId?: string) => {
       'c.created_at',
       'u.id as peer_id',
       'u.display_name as peer_name',
+      'u.last_seen_at as peer_last_seen',
       'lm.id as m_id',
       'lm.sender_id as m_sender_id',
       'lm.client_id as m_client_id',

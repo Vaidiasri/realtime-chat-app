@@ -2,6 +2,7 @@ import { messageSendPayload, type MessageSendAck, type MessageSendError } from '
 import { AppError } from '../../errors.js';
 import type { AppServer } from '../../io.js';
 import { logger } from '../../logger.js';
+import { socketReady } from '../presence/socket.js';
 import * as conversations from './service.js';
 
 const ackErrors = new Set<string>(['invalid_input', 'not_found', 'rate_limited']);
@@ -17,10 +18,14 @@ export function registerConversationSocket(io: AppServer): void {
   io.on('connection', (socket) => {
     const { userId } = socket.data;
 
-    conversations.conversationIdsFor(userId).then(
-      (ids) => socket.join(ids.map((id) => `conv:${id}`)),
-      (err: unknown) => logger.error({ err }, 'joining conversation rooms failed'),
-    );
+    // Presence waits for the rooms: they are who hears this user came online.
+    conversations
+      .conversationIdsFor(userId)
+      .then(async (ids) => {
+        await socket.join(ids.map((id) => `conv:${id}`));
+        if (socket.connected) await socketReady(io, userId, ids);
+      })
+      .catch((err: unknown) => logger.error({ err }, 'joining conversation rooms failed'));
 
     socket.on('message:send', async (payload, ack) => {
       const reply: (r: MessageSendAck) => void = typeof ack === 'function' ? ack : () => undefined;

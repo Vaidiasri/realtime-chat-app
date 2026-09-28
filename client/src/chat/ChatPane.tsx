@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { MessageSendPayload, UserSummary } from '@chat/shared';
+import type { DirectSummary, MessageSendPayload, UserSummary } from '@chat/shared';
 import type { SendResult } from '../socket';
 import {
   describeError,
@@ -19,8 +19,32 @@ interface Props {
   conversationId: string;
   me: UserSummary;
   send: (payload: MessageSendPayload) => Promise<SendResult>;
+  typers: string[];
+  onTyping: (conversationId: string, on: boolean) => void;
   onBack: () => void;
   onInfo: () => void;
+}
+
+const TYPING_EVERY_MS = 3_000;
+const TYPING_IDLE_MS = 5_000;
+
+const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+export function lastSeenText(peer: DirectSummary['peer'], now: number) {
+  if (peer.online) return 'Online';
+  if (!peer.lastSeenAt) return 'Offline';
+  const mins = Math.round((now - Date.parse(peer.lastSeenAt)) / 60_000);
+  if (mins < 1) return 'Last seen just now';
+  if (mins < 60) return `Last seen ${rtf.format(-mins, 'minute')}`;
+  if (mins < 1440) return `Last seen ${rtf.format(-Math.round(mins / 60), 'hour')}`;
+  return `Last seen ${new Date(peer.lastSeenAt).toLocaleDateString()}`;
+}
+
+export function typingText(names: readonly string[]) {
+  if (names.length === 0) return '';
+  if (names.length === 1) return `${names[0]} is typing...`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+  return 'Several people are typing...';
 }
 
 const failText: Record<string, string> = {
@@ -33,7 +57,7 @@ const failText: Record<string, string> = {
 // Resending cannot fix invalid_input or not_found, so those get no Retry.
 const retryable = new Set(['timeout', 'rate_limited', 'internal']);
 
-export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
+export function ChatPane({ conversationId, me, send, typers, onTyping, onBack, onInfo }: Props) {
   const qc = useQueryClient();
   const convo = useConversations().data?.find((c) => c.id === conversationId);
   const isGroup = convo?.type === 'group';
@@ -50,6 +74,35 @@ export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
     staleTime: Infinity,
   });
   const [draft, setDraft] = useState('');
+  // The last seen line is relative, so it renders again every minute.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Composer typing signal: a start at most every 3s, one stop when typing ends.
+  const lastStart = useRef(0);
+  const idle = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const stopTyping = useCallback(() => {
+    clearTimeout(idle.current);
+    if (lastStart.current === 0) return;
+    lastStart.current = 0;
+    onTyping(conversationId, false);
+  }, [onTyping, conversationId]);
+  useEffect(() => stopTyping, [stopTyping]);
+
+  const onDraft = (text: string) => {
+    setDraft(text);
+    if (!text.trim()) return stopTyping();
+    const at = Date.now();
+    if (at - lastStart.current >= TYPING_EVERY_MS) {
+      lastStart.current = at;
+      onTyping(conversationId, true);
+    }
+    clearTimeout(idle.current);
+    idle.current = setTimeout(stopTyping, TYPING_IDLE_MS);
+  };
   const [older, setOlder] = useState('idle'); // 'idle', 'loading', or an error text;
   const scrollRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLLIElement>(null);
@@ -110,6 +163,7 @@ export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
     const body = draft.trim();
     if (!body) return;
     setDraft('');
+    stopTyping();
     const clientId = crypto.randomUUID();
     void deliver({
       id: `local:${clientId}`,
@@ -150,7 +204,16 @@ export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
             </button>
           </>
         ) : (
-          <h2 className="truncate font-semibold">{convo ? titleOf(convo) : 'Conversation'}</h2>
+          <div className="flex min-w-0 flex-col">
+            <h2 className="truncate font-semibold">{convo ? titleOf(convo) : 'Conversation'}</h2>
+            {convo?.type === 'direct' && (
+              <span
+                className={`text-xs ${convo.peer.online ? 'text-green-700' : 'text-slate-500'}`}
+              >
+                {lastSeenText(convo.peer, now)}
+              </span>
+            )}
+          </div>
         )}
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -227,6 +290,9 @@ export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
           </ul>
         )}
       </div>
+      <p role="status" className="h-5 shrink-0 truncate px-3 text-xs text-slate-500 italic">
+        {typingText(typers.map(senderName))}
+      </p>
       <form onSubmit={submit} className="flex gap-2 border-t border-slate-200 bg-white p-3">
         <label htmlFor="composer" className="sr-only">
           Message
@@ -234,7 +300,8 @@ export function ChatPane({ conversationId, me, send, onBack, onInfo }: Props) {
         <input
           id="composer"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => onDraft(e.target.value)}
+          onBlur={stopTyping}
           maxLength={4000}
           autoComplete="off"
           placeholder="Write a message"

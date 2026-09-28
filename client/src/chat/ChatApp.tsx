@@ -1,13 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UserSummary } from '@chat/shared';
 import { logout } from '../api';
 import { connectSocket, sendMessage, type AppSocket, type SendResult } from '../socket';
 import type { MessageSendPayload } from '@chat/shared';
-import { dropConversation, putConversation, putGroup, putMessage, syncAll } from './cache';
+import {
+  dropConversation,
+  putConversation,
+  putGroup,
+  putMessage,
+  putPresence,
+  syncAll,
+} from './cache';
 import { ChatPane } from './ChatPane';
 import { GroupPanel } from './GroupPanel';
 import { Sidebar } from './Sidebar';
+
+const TYPING_TTL_MS = 6_000;
+
+/** Who is typing where: conversation id, then user id, then when it expires. */
+type Typing = Readonly<Record<string, Readonly<Record<string, number>>>>;
+
+// A new map with one typer set until `until`, or removed when `until` is null.
+const setTyper = (all: Typing, conversationId: string, userId: string, until: number | null) => {
+  const rest = Object.fromEntries(
+    Object.entries(all[conversationId] ?? {}).filter(([id]) => id !== userId),
+  );
+  return { ...all, [conversationId]: until === null ? rest : { ...rest, [userId]: until } };
+};
 
 export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () => void }) {
   const qc = useQueryClient();
@@ -22,6 +42,25 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     openRef.current = openId;
   }, [openId]);
   const socketRef = useRef<{ socket: AppSocket; stop: () => void }>(undefined);
+  const [typing, setTyping] = useState<Typing>({});
+  const anyTyping = Object.values(typing).some((c) => Object.keys(c).length > 0);
+
+  // Drop typers whose last start is older than the TTL. Runs only while someone is typing.
+  useEffect(() => {
+    if (!anyTyping) return;
+    const t = setInterval(() => {
+      const now = Date.now();
+      setTyping((all) =>
+        Object.fromEntries(
+          Object.entries(all).map(([id, c]) => [
+            id,
+            Object.fromEntries(Object.entries(c).filter(([, until]) => until > now)),
+          ]),
+        ),
+      );
+    }, 1_000);
+    return () => clearInterval(t);
+  }, [anyTyping]);
 
   useEffect(() => {
     const conn = connectSocket({
@@ -37,7 +76,18 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
         if (socket.connected) setLink('live');
       });
     });
-    socket.on('message:new', (m) => putMessage(qc, m));
+    socket.on('message:new', (m) => {
+      putMessage(qc, m);
+      setTyping((all) => setTyper(all, m.conversationId, m.senderId, null));
+    });
+    socket.on('presence:update', (p) => putPresence(qc, p));
+    // The sender's other tabs get their own typing too; never show yourself.
+    socket.on('typing:update', (t) => {
+      if (t.userId === me.id) return;
+      setTyping((all) =>
+        setTyper(all, t.conversationId, t.userId, t.typing ? Date.now() + TYPING_TTL_MS : null),
+      );
+    });
     socket.on('conversation:new', (c) => putConversation(qc, c));
     socket.on('group:updated', (g) => putGroup(qc, g, me.id));
     socket.on('group:removed', (r) => {
@@ -74,6 +124,13 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     socketRef.current
       ? sendMessage(socketRef.current.socket, payload)
       : Promise.resolve({ ok: false, error: 'timeout' });
+
+  // Volatile: a typing event is worthless later, so it is dropped while offline, not queued.
+  const signalTyping = useCallback((conversationId: string, on: boolean) => {
+    socketRef.current?.socket.volatile.emit(on ? 'typing:start' : 'typing:stop', {
+      conversationId,
+    });
+  }, []);
 
   const open = openId !== null;
   return (
@@ -121,6 +178,8 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
               conversationId={openId}
               me={me}
               send={send}
+              typers={Object.keys(typing[openId] ?? {})}
+              onTyping={signalTyping}
               onBack={() => openConversation(null)}
               onInfo={() => setInfo(true)}
             />

@@ -6,6 +6,7 @@ import type {
   GroupResponse,
   Message,
   MessagesResponse,
+  PresenceUpdate,
 } from '@chat/shared';
 import { apiFetch } from '../api';
 
@@ -146,6 +147,17 @@ export function putConversation(qc: QueryClient, c: ConversationSummary) {
     list?.some((x) => x.id === c.id)
       ? list.map((x) => (x.id === c.id ? c : x))
       : [c, ...(list ?? [])],
+  );
+}
+
+/** Someone came online or left: patch the DM rows where they are the peer. */
+export function putPresence(qc: QueryClient, p: PresenceUpdate) {
+  qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+    list?.map((c) =>
+      c.type === 'direct' && c.peer.id === p.userId
+        ? { ...c, peer: { ...c.peer, online: p.online, lastSeenAt: p.lastSeenAt } }
+        : c,
+    ),
   );
 }
 

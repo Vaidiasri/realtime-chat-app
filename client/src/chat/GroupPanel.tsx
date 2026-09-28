@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useSyncExternalStore, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   can,
@@ -9,12 +9,37 @@ import {
   type Role,
   type UserSummary,
 } from '@chat/shared';
+import { X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiFetch } from '../api';
 import { describeError, putGroup, useGroup } from './cache';
 import { PeoplePicker } from './NewGroup';
 import { Avatar } from './Sidebar';
 
 const roleLabel: Record<Role, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
+
+// At xl the panel fits beside the chat; below it slides over as a sheet.
+const wide = window.matchMedia('(min-width: 1280px)');
+const useWide = () =>
+  useSyncExternalStore(
+    (cb) => {
+      wide.addEventListener('change', cb);
+      return () => wide.removeEventListener('change', cb);
+    },
+    () => wide.matches,
+  );
 
 /**
  * Members and role controls. Buttons show only when `can()` allows them, but the server decides:
@@ -29,6 +54,39 @@ export function GroupPanel({
   me: UserSummary;
   onClose: () => void;
 }) {
+  const body = <PanelBody groupId={groupId} me={me} />;
+  if (useWide()) {
+    return (
+      <aside
+        aria-labelledby="group-panel-title"
+        className="flex w-80 shrink-0 flex-col border-l bg-muted/30 dark:bg-card/40"
+      >
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-5">
+          <h2 id="group-panel-title" className="text-sm font-semibold">
+            Group info
+          </h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X />
+          </Button>
+        </div>
+        {body}
+      </aside>
+    );
+  }
+  return (
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full gap-0 sm:max-w-sm">
+        <SheetHeader className="border-b px-5 py-4">
+          <SheetTitle>Group info</SheetTitle>
+          <SheetDescription className="sr-only">Members and group settings</SheetDescription>
+        </SheetHeader>
+        {body}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function PanelBody({ groupId, me }: { groupId: string; me: UserSummary }) {
   const qc = useQueryClient();
   const group = useGroup(groupId);
   const [error, setError] = useState('');
@@ -56,128 +114,128 @@ export function GroupPanel({
   const g = group.data;
   const myRole = g?.members.find((m) => m.userId === me.id)?.role;
 
-  return (
-    <aside
-      aria-labelledby="group-panel-title"
-      className="glass fixed inset-0 z-10 flex flex-col md:panel md:static md:w-80 md:overflow-hidden md:rounded-2xl"
-    >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200/70 px-4 py-3">
-        <h2 id="group-panel-title" className="font-semibold">
-          Group info
-        </h2>
-        <button type="button" onClick={onClose} className="btn">
-          Close
-        </button>
+  let content: ReactNode;
+  if (group.isPending) {
+    content = (
+      <div aria-label="Loading members" className="flex flex-col gap-3">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {group.isPending ? (
-          <p className="text-sm text-slate-500">Loading members...</p>
-        ) : group.isError || !g || !myRole ? (
-          <div className="flex flex-col items-start gap-2 text-sm">
-            <p className="text-red-700">Could not load this group.</p>
-            <button type="button" onClick={() => void group.refetch()} className="btn">
-              Retry
-            </button>
-          </div>
+    );
+  } else if (group.isError || !g || !myRole) {
+    content = (
+      <div className="flex flex-col items-start gap-3 text-sm">
+        <p className="text-destructive">Could not load this group.</p>
+        <Button variant="outline" size="sm" onClick={() => void group.refetch()}>
+          Retry
+        </Button>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="flex flex-col gap-5">
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        )}
+        {can('rename', myRole) ? (
+          <EditGroup key={`${g.name}|${g.avatarUrl ?? ''}`} group={g} busy={busy} run={run} />
         ) : (
-          <div className="flex flex-col gap-4">
-            {error && (
-              <p role="alert" className="text-sm text-red-700">
-                {error}
-              </p>
-            )}
-            {can('rename', myRole) ? (
-              <EditGroup key={`${g.name}|${g.avatarUrl ?? ''}`} group={g} busy={busy} run={run} />
-            ) : (
-              <div className="flex items-center gap-3">
-                <Avatar key={g.avatarUrl} name={g.name} url={g.avatarUrl} />
-                <p className="truncate font-medium">{g.name}</p>
-              </div>
-            )}
-            {can('add', myRole) && (
-              <PeoplePicker
-                id="panel-add-people"
-                exclude={new Set(g.members.map((m) => m.userId))}
-                onPick={(u) => void run(`${base}/members`, 'POST', { userIds: [u.id] })}
-              />
-            )}
-            <section>
-              <h3 className="mb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {g.members.length} members
-              </h3>
-              <ul className="divide-y divide-slate-200/60">
-                {g.members.map((m) => (
-                  <MemberRow
-                    key={m.userId}
-                    m={m}
-                    me={me}
-                    myRole={myRole}
-                    busy={busy}
-                    act={(path, method, body) => void run(`${base}/${path}`, method, body)}
-                  />
-                ))}
-              </ul>
-            </section>
-            <section className="flex flex-col gap-2 border-t border-slate-200/70 pt-4">
-              {confirm ? (
-                <div className="flex flex-col gap-2 rounded-xl bg-red-50 p-3 text-sm">
-                  <p>
-                    {confirm === 'leave'
-                      ? `Leave ${g.name}? You will stop getting its messages.`
-                      : `Delete ${g.name} for everyone? This cannot be undone.`}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        void (
-                          confirm === 'leave'
-                            ? run(`${base}/members/${me.id}`, 'DELETE')
-                            : run(base, 'DELETE')
-                        ).then(() => setConfirm(null))
-                      }
-                      className="btn btn-danger"
-                    >
-                      {confirm === 'leave' ? 'Leave' : 'Delete'}
-                    </button>
-                    <button type="button" onClick={() => setConfirm(null)} className="btn">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {myRole === 'owner' ? (
-                    <p className="text-xs text-slate-500">
-                      To leave, make someone else the owner first.
-                    </p>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirm('leave')}
-                      className="self-start rounded-md text-sm font-medium text-red-700 hover:underline"
-                    >
-                      Leave group
-                    </button>
-                  )}
-                  {can('delete', myRole) && (
-                    <button
-                      type="button"
-                      onClick={() => setConfirm('delete')}
-                      className="self-start rounded-md text-sm font-medium text-red-700 hover:underline"
-                    >
-                      Delete group
-                    </button>
-                  )}
-                </>
-              )}
-            </section>
+          <div className="flex items-center gap-3">
+            <Avatar key={g.avatarUrl} name={g.name} url={g.avatarUrl} />
+            <p className="truncate font-medium">{g.name}</p>
           </div>
         )}
+        {can('add', myRole) && (
+          <PeoplePicker
+            id="panel-add-people"
+            exclude={new Set(g.members.map((m) => m.userId))}
+            onPick={(u) => void run(`${base}/members`, 'POST', { userIds: [u.id] })}
+          />
+        )}
+        <section className="flex flex-col gap-1">
+          <h3 className="text-xs font-medium text-muted-foreground">{g.members.length} members</h3>
+          <ul className="-mx-2 flex flex-col">
+            {g.members.map((m) => (
+              <MemberRow
+                key={m.userId}
+                m={m}
+                me={me}
+                myRole={myRole}
+                busy={busy}
+                act={(path, method, body) => void run(`${base}/${path}`, method, body)}
+              />
+            ))}
+          </ul>
+        </section>
+        <Separator />
+        <section className="flex flex-col items-start gap-2">
+          {confirm ? (
+            <div className="flex w-full flex-col gap-3 rounded-lg bg-destructive/10 p-3 text-sm">
+              <p>
+                {confirm === 'leave'
+                  ? `Leave ${g.name}? You will stop getting its messages.`
+                  : `Delete ${g.name} for everyone? This cannot be undone.`}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() =>
+                    void (
+                      confirm === 'leave'
+                        ? run(`${base}/members/${me.id}`, 'DELETE')
+                        : run(base, 'DELETE')
+                    ).then(() => setConfirm(null))
+                  }
+                >
+                  {confirm === 'leave' ? 'Leave' : 'Delete'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirm(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {myRole === 'owner' ? (
+                <p className="text-xs text-muted-foreground">
+                  To leave, make someone else the owner first.
+                </p>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirm('leave')}
+                  className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  Leave group
+                </Button>
+              )}
+              {can('delete', myRole) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirm('delete')}
+                  className="-ml-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  Delete group
+                </Button>
+              )}
+            </>
+          )}
+        </section>
       </div>
-    </aside>
-  );
+    );
+  }
+
+  return <div className="min-h-0 flex-1 overflow-y-auto p-5">{content}</div>;
 }
 
 function EditGroup({
@@ -208,43 +266,41 @@ function EditGroup({
   };
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
+    <form onSubmit={save} className="flex flex-col gap-3">
+      <div className="flex items-end gap-3">
         <Avatar key={group.avatarUrl} name={group.name} url={group.avatarUrl} />
-        <div className="min-w-0 flex-1">
-          <label htmlFor="panel-name" className="text-sm font-medium">
-            Name
-          </label>
-          <input
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Label htmlFor="panel-name">Name</Label>
+          <Input
             id="panel-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={100}
-            className="input mt-1 w-full"
+            className="h-9"
           />
         </div>
       </div>
-      <label htmlFor="panel-avatar" className="text-sm font-medium">
-        Avatar URL
-      </label>
-      <input
-        id="panel-avatar"
-        type="url"
-        placeholder="https://..."
-        value={avatar}
-        onChange={(e) => setAvatar(e.target.value)}
-        maxLength={2048}
-        className="input"
-      />
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="panel-avatar">Avatar URL</Label>
+        <Input
+          id="panel-avatar"
+          type="url"
+          placeholder="https://..."
+          value={avatar}
+          onChange={(e) => setAvatar(e.target.value)}
+          maxLength={2048}
+          className="h-9"
+        />
+      </div>
       {invalid && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-destructive">
           {invalid}
         </p>
       )}
       {dirty && (
-        <button type="submit" disabled={busy} className="btn btn-primary self-start">
+        <Button type="submit" size="sm" disabled={busy} className="self-start">
           Save
-        </button>
+        </Button>
       )}
     </form>
   );
@@ -265,7 +321,7 @@ function MemberRow({
 }) {
   const self = m.userId === me.id;
   const path = `members/${m.userId}`;
-  const buttons: { label: string; onClick: () => void }[] = [];
+  const buttons: { label: string; danger?: boolean; onClick: () => void }[] = [];
   if (!self && can('setRole', myRole, m.role)) {
     buttons.push(
       m.role === 'admin'
@@ -280,33 +336,35 @@ function MemberRow({
     });
   }
   if (!self && can('remove', myRole, m.role)) {
-    buttons.push({ label: 'Remove', onClick: () => act(path, 'DELETE') });
+    buttons.push({ label: 'Remove', danger: true, onClick: () => act(path, 'DELETE') });
   }
 
   return (
-    <li className="flex flex-col gap-1 py-2">
-      <span className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">
+    <li className="flex flex-col gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-accent/60">
+      <span className="flex items-center gap-3">
+        <Avatar name={m.displayName} url={null} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {m.displayName}
-          {self && ' (you)'}
+          {self && <span className="font-normal text-muted-foreground"> (you)</span>}
         </span>
-        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
+        <Badge variant={m.role === 'member' ? 'outline' : 'secondary'} className="shrink-0">
           {roleLabel[m.role]}
-        </span>
+        </Badge>
       </span>
       {buttons.length > 0 && (
-        <span className="flex flex-wrap gap-2">
+        <span className="flex flex-wrap gap-1.5 pl-9">
           {buttons.map((b) => (
-            <button
+            <Button
               key={b.label}
-              type="button"
+              variant="outline"
+              size="xs"
               disabled={busy}
               onClick={b.onClick}
               aria-label={`${b.label}: ${m.displayName}`}
-              className="btn px-2 py-0.5 text-xs"
+              className={b.danger ? 'text-destructive hover:text-destructive' : undefined}
             >
               {b.label}
-            </button>
+            </Button>
           ))}
         </span>
       )}

@@ -4,6 +4,7 @@ import type { AuthResponse } from '@chat/shared';
 import { refreshSession } from './api';
 import { AuthPage } from './AuthPage';
 import { ChatApp } from './chat/ChatApp';
+import { Logo } from './icons';
 
 // ponytail: no router; a reload returns to the sidebar with nothing open.
 export function App() {
@@ -23,8 +24,10 @@ export function App() {
 
   if (session === undefined) {
     return (
-      <main className="flex h-full items-center justify-center gap-3 text-sm text-slate-500">
-        <span className="size-4 animate-spin rounded-full border-2 border-slate-300 border-t-accent" />
+      <main className="flex h-full flex-col items-center justify-center gap-4 text-sm text-muted-foreground">
+        <span className="animate-pulse">
+          <Logo />
+        </span>
         Loading...
       </main>
     );

@@ -1,12 +1,16 @@
 import { useState, type FormEvent } from 'react';
 import { loginBody, signupBody, type AuthResponse } from '@chat/shared';
 import { login, signup } from './api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Logo } from './icons';
 
 const Brand = () => (
   <div className="flex items-center gap-3">
     <Logo />
-    <span className="text-lg font-semibold tracking-tight text-slate-900">Chat</span>
+    <span className="text-lg font-semibold tracking-tight">Chat</span>
   </div>
 );
 
@@ -61,11 +65,9 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
   };
 
   const field = (name: Field, label: string, type: string, autoComplete: string) => (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={name} className="text-sm font-medium text-slate-700">
-        {label}
-      </label>
-      <input
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
         id={name}
         type={type}
         autoComplete={autoComplete}
@@ -73,10 +75,10 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
         onChange={(e) => setValues({ ...values, [name]: e.target.value })}
         aria-invalid={errors[name] ? true : undefined}
         aria-describedby={errors[name] ? `${name}-error` : undefined}
-        className="input"
+        className="h-10"
       />
       {errors[name] && (
-        <p id={`${name}-error`} className="text-sm text-red-700">
+        <p id={`${name}-error`} className="text-sm text-destructive">
           {errors[name]}
         </p>
       )}
@@ -85,43 +87,51 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
 
   const isSignup = mode === 'signup';
   return (
-    <main className="flex h-full flex-col items-center justify-center overflow-y-auto px-4 py-8 text-slate-900">
+    <main className="flex h-full flex-col items-center justify-center overflow-y-auto bg-[radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)] px-4 py-8">
       <Brand />
-      <form
-        onSubmit={(e) => void submit(e)}
-        noValidate
-        className="glass panel mt-6 flex w-full max-w-sm flex-col gap-4 rounded-2xl p-7"
-      >
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {isSignup ? 'Create an account' : 'Log in'}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
+      <Card className="mt-8 w-full max-w-sm py-7 shadow-xl shadow-primary/5 [--card-spacing:--spacing(7)]">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold tracking-tight">
+            <h1>{isSignup ? 'Create an account' : 'Log in'}</h1>
+          </CardTitle>
+          <CardDescription>
             {isSignup ? 'Start chatting in seconds.' : 'Welcome back. Pick up where you left off.'}
-          </p>
-        </div>
-        {isSignup && field('displayName', 'Name', 'text', 'name')}
-        {field('email', 'Email', 'email', 'email')}
-        {field('password', 'Password', 'password', isSignup ? 'new-password' : 'current-password')}
-        {formError && (
-          <p role="alert" className="text-sm text-red-700">
-            {formError}
-          </p>
-        )}
-        <button type="submit" disabled={pending} className="btn btn-primary py-2">
-          {pending ? 'Please wait...' : isSignup ? 'Sign up' : 'Log in'}
-        </button>
-        <p className="text-center text-sm text-slate-500">
-          {isSignup ? 'Already have an account? ' : 'New here? '}
-          <button
-            type="button"
-            onClick={() => switchMode(isSignup ? 'login' : 'signup')}
-            className="font-medium text-accent hover:underline"
-          >
-            {isSignup ? 'Log in' : 'Sign up'}
-          </button>
-        </p>
-      </form>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-5">
+            {isSignup && field('displayName', 'Name', 'text', 'name')}
+            {field('email', 'Email', 'email', 'email')}
+            {field(
+              'password',
+              'Password',
+              'password',
+              isSignup ? 'new-password' : 'current-password',
+            )}
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {formError}
+              </p>
+            )}
+            <Button type="submit" disabled={pending} size="lg" className="h-10">
+              {pending ? 'Please wait...' : isSignup ? 'Sign up' : 'Log in'}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              {isSignup ? 'Already have an account? ' : 'New here? '}
+              <button
+                type="button"
+                onClick={() => switchMode(isSignup ? 'login' : 'signup')}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {isSignup ? 'Log in' : 'Sign up'}
+              </button>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
     </main>
   );
 }

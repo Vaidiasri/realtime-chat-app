@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ConversationResponse, UsersResponse } from '@chat/shared';
+import { Search, SquarePen } from 'lucide-react';
+import { Avatar as AvatarRoot, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { apiFetch } from '../api';
 import { activity, describeError, putConversation, titleOf, useConversations } from './cache';
 import { NewGroupDialog } from './NewGroup';
@@ -9,6 +16,9 @@ interface Props {
   openId: string | null;
   onOpen: (id: string) => void;
 }
+
+const rowClass =
+  'flex w-full items-center gap-3 rounded-lg px-2.5 text-left transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none';
 
 export function Sidebar({ openId, onOpen }: Props) {
   const qc = useQueryClient();
@@ -53,120 +63,145 @@ export function Sidebar({ openId, onOpen }: Props) {
 
   return (
     <>
-      <div className="border-b border-slate-200/70 p-3">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-3 px-3 pt-1 pb-3">
+        <div className="flex items-center justify-between gap-2 pl-1">
+          <h2 className="text-sm font-semibold tracking-tight">Messages</h2>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="New group"
+                onClick={() => setCreating(true)}
+              >
+                <SquarePen />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>New group</TooltipContent>
+          </Tooltip>
+        </div>
+        <div className="relative">
           <label htmlFor="user-search" className="sr-only">
             Search people
           </label>
-          <input
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
             id="user-search"
             type="search"
             placeholder="Search people"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="input min-w-0 flex-1 text-sm"
+            className="h-9 border-transparent bg-muted pl-8 dark:bg-muted"
           />
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className="btn btn-primary shrink-0"
-          >
-            New group
-          </button>
         </div>
         {startError && (
-          <p role="alert" className="mt-2 text-sm text-red-700">
+          <p role="alert" className="px-1 text-sm text-destructive">
             {startError}
           </p>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {searching ? (
           users.isError ? (
-            <p className="p-4 text-sm text-red-700">{describeError(users.error)}</p>
+            <p className="p-4 text-sm text-destructive">{describeError(users.error)}</p>
           ) : users.isPending || q !== text.trim() ? (
-            <p className="p-4 text-sm text-slate-500">Searching...</p>
+            <RowSkeletons count={3} />
           ) : users.data.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">No one matches that.</p>
+            <p className="p-4 text-sm text-muted-foreground">No one matches that.</p>
           ) : (
-            <ul>
+            <ul className="flex flex-col gap-0.5">
               {users.data.map((u) => (
                 <li key={u.id}>
                   <button
                     type="button"
                     onClick={() => void start(u.id)}
-                    className="flex w-full flex-col rounded-xl px-3 py-2.5 text-left hover:bg-slate-100/80"
+                    className={`${rowClass} py-2`}
                   >
-                    <span className="truncate font-medium">{u.displayName}</span>
-                    <span className="truncate text-sm text-slate-500">{u.email}</span>
+                    <Avatar name={u.displayName} url={null} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium">{u.displayName}</span>
+                      <span className="truncate text-xs text-muted-foreground">{u.email}</span>
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
           )
         ) : conversations.isPending ? (
-          <p className="p-4 text-sm text-slate-500">Loading conversations...</p>
+          <RowSkeletons count={6} />
         ) : conversations.isError ? (
-          <div className="flex flex-col items-start gap-2 p-4 text-sm">
-            <p className="text-red-700">Could not load conversations.</p>
-            <button type="button" onClick={() => void conversations.refetch()} className="btn">
+          <div className="flex flex-col items-start gap-3 p-4 text-sm">
+            <p className="text-destructive">Could not load conversations.</p>
+            <Button variant="outline" size="sm" onClick={() => void conversations.refetch()}>
               Retry
-            </button>
+            </Button>
           </div>
         ) : sorted.length === 0 ? (
-          <p className="p-4 text-sm text-slate-500">
+          <p className="p-4 text-sm text-muted-foreground">
             No conversations yet. Search for someone to start one.
           </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
-            {sorted.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(c.id)}
-                  aria-current={c.id === openId ? 'true' : undefined}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-slate-100/80 aria-[current]:bg-accent-soft"
-                >
-                  <span className="relative shrink-0">
-                    <Avatar
-                      key={c.type === 'group' ? c.avatarUrl : null}
-                      name={titleOf(c)}
-                      url={c.type === 'group' ? c.avatarUrl : null}
-                    />
-                    {c.type === 'direct' && c.peer.online && (
-                      <span
-                        role="img"
-                        aria-label="online"
-                        className="absolute right-0 bottom-0 size-2.5 rounded-full bg-green-500 ring-2 ring-white"
+            {sorted.map((c) => {
+              const unread = c.unreadCount > 0;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(c.id)}
+                    aria-current={c.id === openId ? 'true' : undefined}
+                    className={`${rowClass} py-2.5 aria-[current]:bg-accent`}
+                  >
+                    <span className="relative shrink-0">
+                      <Avatar
+                        key={c.type === 'group' ? c.avatarUrl : null}
+                        name={titleOf(c)}
+                        url={c.type === 'group' ? c.avatarUrl : null}
                       />
-                    )}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">{titleOf(c)}</span>
-                      <time className="shrink-0 text-xs text-slate-500" dateTime={activity(c)}>
-                        {formatTime(activity(c))}
-                      </time>
-                    </span>
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[13px] text-slate-500">
-                        {c.latestMessage
-                          ? c.latestMessage.deletedAt
-                            ? 'Message deleted'
-                            : c.latestMessage.body || 'Attachment'
-                          : 'No messages yet'}
-                      </span>
-                      {c.unreadCount > 0 && (
-                        <span className="shrink-0 min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] leading-5 font-semibold text-on-accent">
-                          {c.unreadCount > 99 ? '99+' : c.unreadCount}
-                          <span className="sr-only"> unread</span>
-                        </span>
+                      {c.type === 'direct' && c.peer.online && (
+                        <span
+                          role="img"
+                          aria-label="online"
+                          className="absolute right-0 bottom-0 size-2.5 rounded-full bg-success ring-2 ring-background"
+                        />
                       )}
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{titleOf(c)}</span>
+                        <time
+                          className={`shrink-0 text-[11px] tabular-nums ${unread ? 'font-medium text-primary' : 'text-muted-foreground'}`}
+                          dateTime={activity(c)}
+                        >
+                          {formatTime(activity(c))}
+                        </time>
+                      </span>
+                      <span className="flex items-center justify-between gap-2">
+                        <span
+                          className={`truncate text-[13px] ${unread ? 'text-foreground' : 'text-muted-foreground'}`}
+                        >
+                          {c.latestMessage
+                            ? c.latestMessage.deletedAt
+                              ? 'Message deleted'
+                              : c.latestMessage.body || 'Attachment'
+                            : 'No messages yet'}
+                        </span>
+                        {unread && (
+                          <Badge className="h-5 min-w-5 px-1.5 tabular-nums">
+                            {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                            <span className="sr-only"> unread</span>
+                          </Badge>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -183,29 +218,43 @@ export function Sidebar({ openId, onOpen }: Props) {
   );
 }
 
+const RowSkeletons = ({ count }: { count: number }) => (
+  <ul aria-label="Loading" className="flex flex-col gap-0.5">
+    {Array.from({ length: count }, (_, i) => (
+      <li key={i} className="flex items-center gap-3 px-2.5 py-2.5">
+        <Skeleton className="size-10 rounded-full" />
+        <span className="flex flex-1 flex-col gap-2">
+          <Skeleton className="h-3 w-1/2" />
+          <Skeleton className="h-3 w-4/5" />
+        </span>
+      </li>
+    ))}
+  </ul>
+);
+
 /** The group image, or initials when there is none or it fails to load. */
-export function Avatar({ name, url }: { name: string; url: string | null }) {
-  const [broken, setBroken] = useState(false);
+export function Avatar({
+  name,
+  url,
+  size = 'lg',
+}: {
+  name: string;
+  url: string | null;
+  size?: 'sm' | 'default' | 'lg';
+}) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join('');
-  return url && !broken ? (
-    <img
-      src={url}
-      alt=""
-      onError={() => setBroken(true)}
-      className="size-10 shrink-0 rounded-full object-cover"
-    />
-  ) : (
-    <span
-      aria-hidden="true"
-      className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-sm font-semibold text-slate-700"
-    >
-      {initials || '?'}
-    </span>
+  return (
+    <AvatarRoot size={size} aria-hidden="true">
+      {url && <AvatarImage src={url} alt="" />}
+      <AvatarFallback className="bg-secondary font-medium text-secondary-foreground">
+        {initials || '?'}
+      </AvatarFallback>
+    </AvatarRoot>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Attachment } from '@chat/shared';
+import { FileText } from 'lucide-react';
 import { authedFetch } from '../api';
 
 // The download needs the Bearer token, so an <img src> cannot fetch it: fetch once, show a blob URL.
@@ -48,9 +49,9 @@ export function AttachmentView({
     <button
       type="button"
       onClick={() => void download()}
-      className="flex items-center gap-2 rounded-xl border border-current/20 bg-current/5 px-3 py-2 text-left text-sm"
+      className="flex max-w-full items-center gap-2.5 rounded-lg border border-current/15 bg-current/5 px-3 py-2 text-left text-sm transition-colors hover:bg-current/10"
     >
-      <span aria-hidden="true">{'\u{1F4CE}'}</span>
+      <FileText aria-hidden="true" className="size-4 shrink-0 opacity-80" />
       <span className="min-w-0 truncate font-medium">{file.name}</span>
       <span className="shrink-0 text-xs opacity-70">
         {isImage && url.isPending ? 'Loading...' : sizeText(file.size)}

@@ -132,3 +132,42 @@ export const messagePage = (
     .limit(limit)
     .execute();
 };
+
+/** Group conversation rows for one user, with the caller's role, member count and newest message. */
+export const groupSummaries = (userId: string, conversationId?: string) => {
+  let query = db
+    .selectFrom('memberships as me')
+    .innerJoin('conversations as c', 'c.id', 'me.conversation_id')
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom('messages as m')
+          .select(messageColumns)
+          .whereRef('m.conversation_id', '=', 'c.id')
+          .orderBy('m.id', 'desc')
+          .limit(1)
+          .as('lm'),
+      (j) => j.onTrue(),
+    )
+    .select((eb) => [
+      'c.id',
+      'c.created_at',
+      'c.name',
+      'c.avatar_url',
+      'me.role',
+      eb
+        .selectFrom('memberships as mc')
+        .select(eb.fn.countAll<string>().as('n'))
+        .whereRef('mc.conversation_id', '=', 'c.id')
+        .as('member_count'),
+      'lm.id as m_id',
+      'lm.sender_id as m_sender_id',
+      'lm.client_id as m_client_id',
+      'lm.body as m_body',
+      'lm.created_at as m_created_at',
+    ])
+    .where('me.user_id', '=', userId)
+    .where('c.type', '=', 'group');
+  if (conversationId) query = query.where('c.id', '=', conversationId);
+  return query.execute();
+};

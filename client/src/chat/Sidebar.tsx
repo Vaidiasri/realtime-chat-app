@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ConversationResponse, UsersResponse } from '@chat/shared';
 import { apiFetch } from '../api';
-import { activity, describeError, putConversation, useConversations } from './cache';
+import { activity, describeError, putConversation, titleOf, useConversations } from './cache';
+import { NewGroupDialog } from './NewGroup';
 
 interface Props {
   openId: string | null;
@@ -14,6 +15,7 @@ export function Sidebar({ openId, onOpen }: Props) {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const [startError, setStartError] = useState('');
+  const [creating, setCreating] = useState(false);
   const conversations = useConversations();
 
   useEffect(() => {
@@ -52,17 +54,26 @@ export function Sidebar({ openId, onOpen }: Props) {
   return (
     <>
       <div className="border-b border-slate-200 p-3">
-        <label htmlFor="user-search" className="sr-only">
-          Search people
-        </label>
-        <input
-          id="user-search"
-          type="search"
-          placeholder="Search people by name or email"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
-        />
+        <div className="flex gap-2">
+          <label htmlFor="user-search" className="sr-only">
+            Search people
+          </label>
+          <input
+            id="user-search"
+            type="search"
+            placeholder="Search people by name or email"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-slate-900 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium"
+          >
+            New group
+          </button>
+        </div>
         {startError && (
           <p role="alert" className="mt-2 text-sm text-red-700">
             {startError}
@@ -118,16 +129,23 @@ export function Sidebar({ openId, onOpen }: Props) {
                   type="button"
                   onClick={() => onOpen(c.id)}
                   aria-current={c.id === openId ? 'true' : undefined}
-                  className="flex w-full flex-col px-4 py-3 text-left hover:bg-slate-100 aria-[current]:bg-slate-200"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-100 aria-[current]:bg-slate-200"
                 >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="truncate font-medium">{c.peer.displayName}</span>
-                    <time className="shrink-0 text-xs text-slate-500" dateTime={activity(c)}>
-                      {formatTime(activity(c))}
-                    </time>
-                  </span>
-                  <span className="truncate text-sm text-slate-500">
-                    {c.latestMessage?.body ?? 'No messages yet'}
+                  <Avatar
+                    key={c.type === 'group' ? c.avatarUrl : null}
+                    name={titleOf(c)}
+                    url={c.type === 'group' ? c.avatarUrl : null}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate font-medium">{titleOf(c)}</span>
+                      <time className="shrink-0 text-xs text-slate-500" dateTime={activity(c)}>
+                        {formatTime(activity(c))}
+                      </time>
+                    </span>
+                    <span className="truncate text-sm text-slate-500">
+                      {c.latestMessage?.body ?? 'No messages yet'}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -135,7 +153,42 @@ export function Sidebar({ openId, onOpen }: Props) {
           </ul>
         )}
       </div>
+      {creating && (
+        <NewGroupDialog
+          onClose={() => setCreating(false)}
+          onCreated={(id) => {
+            setCreating(false);
+            onOpen(id);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** The group image, or initials when there is none or it fails to load. */
+export function Avatar({ name, url }: { name: string; url: string | null }) {
+  const [broken, setBroken] = useState(false);
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('');
+  return url && !broken ? (
+    <img
+      src={url}
+      alt=""
+      onError={() => setBroken(true)}
+      className="size-9 shrink-0 rounded-full object-cover"
+    />
+  ) : (
+    <span
+      aria-hidden="true"
+      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-300 text-sm font-semibold text-slate-700"
+    >
+      {initials || '?'}
+    </span>
   );
 }
 

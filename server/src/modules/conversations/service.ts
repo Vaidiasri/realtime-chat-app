@@ -1,5 +1,7 @@
 import type {
   ConversationSummary,
+  DirectSummary,
+  GroupSummary,
   HistoryQuery,
   Message,
   MessageSendPayload,
@@ -31,25 +33,50 @@ const toMessage = (r: MessageRow): Message => ({
   createdAt: r.created_at.toISOString(),
 });
 
-type SummaryRow = Awaited<ReturnType<typeof q.summaries>>[number];
+type LatestColumns = {
+  id: string;
+  m_id: string | null;
+  m_sender_id: string | null;
+  m_client_id: string | null;
+  m_body: string | null;
+  m_created_at: Date | null;
+};
 
-const toSummary = (r: SummaryRow): ConversationSummary => ({
+const latestOf = (r: LatestColumns): Message | null =>
+  r.m_id && r.m_sender_id && r.m_client_id && r.m_created_at
+    ? toMessage({
+        id: r.m_id,
+        conversation_id: r.id,
+        sender_id: r.m_sender_id,
+        client_id: r.m_client_id,
+        body: r.m_body,
+        created_at: r.m_created_at,
+      })
+    : null;
+
+type DirectRow = Awaited<ReturnType<typeof q.summaries>>[number];
+type GroupRow = Awaited<ReturnType<typeof q.groupSummaries>>[number];
+
+const toSummary = (r: DirectRow): DirectSummary => ({
   id: r.id,
   type: 'direct',
   peer: { id: r.peer_id, displayName: r.peer_name },
-  latestMessage:
-    r.m_id && r.m_sender_id && r.m_client_id && r.m_created_at
-      ? toMessage({
-          id: r.m_id,
-          conversation_id: r.id,
-          sender_id: r.m_sender_id,
-          client_id: r.m_client_id,
-          body: r.m_body,
-          created_at: r.m_created_at,
-        })
-      : null,
+  latestMessage: latestOf(r),
   createdAt: r.created_at.toISOString(),
 });
+
+const toGroupSummary = (r: GroupRow): GroupSummary => ({
+  id: r.id,
+  type: 'group',
+  name: r.name ?? '',
+  avatarUrl: r.avatar_url,
+  memberCount: Number(r.member_count ?? 0),
+  myRole: r.role,
+  latestMessage: latestOf(r),
+  createdAt: r.created_at.toISOString(),
+});
+
+const activity = (c: ConversationSummary) => c.latestMessage?.createdAt ?? c.createdAt;
 
 /**
  * The one membership rule for REST and sockets. Non members, unknown ids and malformed ids all
@@ -97,16 +124,23 @@ export async function sendMessage(
   return { message: toMessage(row), created };
 }
 
-export async function summaryFor(userId: string, conversationId: string) {
-  const [row] = await q.summaries(userId, conversationId);
-  if (!row) throw new AppError('not_found', 404);
-  return toSummary(row);
+export async function summaryFor(
+  userId: string,
+  conversationId: string,
+): Promise<ConversationSummary> {
+  const [[direct], [group]] = await Promise.all([
+    q.summaries(userId, conversationId),
+    q.groupSummaries(userId, conversationId),
+  ]);
+  if (direct) return toSummary(direct);
+  if (group) return toGroupSummary(group);
+  throw new AppError('not_found', 404);
 }
 
 export async function startDirect(
   me: string,
   other: string,
-): Promise<{ conversation: ConversationSummary; created: boolean }> {
+): Promise<{ conversation: DirectSummary; created: boolean }> {
   if (me === other) throw new AppError('invalid_input', 400);
   const directKey = [me, other].sort().join(':');
   let started: { id: string; created: boolean };
@@ -118,11 +152,16 @@ export async function startDirect(
     if ((err as { code?: unknown }).code === '23503') throw new AppError('not_found', 404);
     throw err;
   }
-  return { conversation: await summaryFor(me, started.id), created: started.created };
+  const [row] = await q.summaries(me, started.id);
+  if (!row) throw new AppError('not_found', 404);
+  return { conversation: toSummary(row), created: started.created };
 }
 
 export async function listConversations(userId: string): Promise<ConversationSummary[]> {
-  return (await q.summaries(userId)).map(toSummary);
+  const [direct, groups] = await Promise.all([q.summaries(userId), q.groupSummaries(userId)]);
+  return [...direct.map(toSummary), ...groups.map(toGroupSummary)].sort((a, b) =>
+    activity(b).localeCompare(activity(a)),
+  );
 }
 
 export async function history(

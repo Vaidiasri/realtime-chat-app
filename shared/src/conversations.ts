@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GroupSummary } from './groups.js';
 
 // Message ids are Postgres bigints, which pg returns as strings. Never convert them to numbers.
 export interface Message {
@@ -16,13 +17,15 @@ export interface UserSummary {
   email: string;
 }
 
-export interface ConversationSummary {
+export interface DirectSummary {
   id: string;
   type: 'direct';
   peer: { id: string; displayName: string };
   latestMessage: Message | null;
   createdAt: string;
 }
+
+export type ConversationSummary = DirectSummary | GroupSummary;
 
 export const searchQuery = z.object({ q: z.string().trim().min(2).max(100) });
 export const startDirectBody = z.object({ userId: z.uuid() });

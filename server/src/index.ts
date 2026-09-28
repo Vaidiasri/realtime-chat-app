@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import type { AppServer } from './io.js';
 import { registerAuthSocket } from './modules/auth/socket.js';
 import { registerConversationSocket } from './modules/conversations/socket.js';
+import { registerGroupSocket } from './modules/groups/socket.js';
 
 try {
   await migrateToLatest();
@@ -21,6 +22,7 @@ const server = http.createServer(createApp(io));
 io.attach(server);
 registerAuthSocket(io);
 registerConversationSocket(io);
+registerGroupSocket(io);
 
 server.listen(config.PORT, () => {
   logger.info(`listening on :${config.PORT}`);

@@ -1,12 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
 
 // Dev keeps one origin: the API and socket are proxied, so cookies behave as in production.
 // Keep changeOrigin off: the auth Origin check compares Origin with the Host this proxy forwards.
 // Use the object form: Vite's string shorthand turns changeOrigin on.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: 5173,
     proxy: {

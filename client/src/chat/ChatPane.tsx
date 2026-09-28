@@ -11,6 +11,29 @@ import {
   type MessageSendPayload,
   type UserSummary,
 } from '@chat/shared';
+import {
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  Info,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  SendHorizontal,
+  SmilePlus,
+  Trash2,
+} from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { authedFetch } from '../api';
 import type { ActionResult, MessageAction, SendResult } from '../socket';
 import { AttachmentView } from './Attachment';
@@ -183,14 +206,13 @@ export function ChatPane({
         : covers(convo.peer.lastDeliveredId, id)
           ? 'Delivered'
           : 'Sent';
+      const Tick = status === 'Sent' ? Check : CheckCheck;
       return (
-        <div className="mt-0.5 text-right text-xs">
-          <span
+        <div className="mt-1 flex justify-end px-1">
+          <Tick
             aria-hidden="true"
-            className={status === 'Read' ? 'font-semibold text-accent' : 'text-slate-500'}
-          >
-            {status === 'Sent' ? '\u2713' : '\u2713\u2713'}
-          </span>
+            className={`size-3.5 ${status === 'Read' ? 'text-primary' : 'text-muted-foreground'}`}
+          />
           <span className="sr-only">{status}</span>
         </div>
       );
@@ -199,7 +221,7 @@ export function ChatPane({
     const seen = others.filter((u) => covers(u.lastReadId, id)).map((u) => u.displayName);
     return (
       <div
-        className="mt-0.5 text-right text-xs text-slate-500"
+        className="mt-1 px-1 text-right text-[11px] text-muted-foreground"
         title={seen.length ? seen.join(', ') : undefined}
       >
         Seen by {seen.length} of {others.length}
@@ -299,62 +321,92 @@ export function ChatPane({
 
   return (
     <>
-      <div className="flex items-center gap-3 border-b border-slate-200/70 px-4 py-3">
-        <button type="button" onClick={onBack} className="btn md:hidden">
-          Back
-        </button>
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b px-3 md:px-5">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onBack}
+          aria-label="Back"
+          className="md:hidden"
+        >
+          <ChevronLeft />
+        </Button>
         {convo && <Avatar name={titleOf(convo)} url={isGroup ? convo.avatarUrl : null} />}
         {isGroup ? (
           <>
             <div className="flex min-w-0 flex-col">
-              <h2 className="truncate font-semibold">
-                <button type="button" onClick={onInfo} className="truncate hover:underline">
+              <h2 className="truncate text-sm font-semibold">
+                <button
+                  type="button"
+                  onClick={onInfo}
+                  className="truncate rounded-sm underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
                   {convo.name}
                 </button>
               </h2>
-              <span className="text-xs text-slate-500">{convo.memberCount} members</span>
+              <span className="text-xs text-muted-foreground">{convo.memberCount} members</span>
             </div>
-            <button type="button" onClick={onInfo} className="btn ml-auto shrink-0">
-              Info
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onInfo}
+                  aria-label="Info"
+                  className="ml-auto shrink-0"
+                >
+                  <Info />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Group info</TooltipContent>
+            </Tooltip>
           </>
         ) : (
           <div className="flex min-w-0 flex-col">
-            <h2 className="truncate font-semibold">{convo ? titleOf(convo) : 'Conversation'}</h2>
+            <h2 className="truncate text-sm font-semibold">
+              {convo ? titleOf(convo) : 'Conversation'}
+            </h2>
             {convo?.type === 'direct' && (
               <span
-                className={`text-xs ${convo.peer.online ? 'text-green-700' : 'text-slate-500'}`}
+                className={`text-xs ${convo.peer.online ? 'text-success' : 'text-muted-foreground'}`}
               >
                 {lastSeenText(convo.peer, now)}
               </span>
             )}
           </div>
         )}
-      </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      </header>
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-5 md:px-6">
         {messages.isPending ? (
-          <p className="text-sm text-slate-500">Loading messages...</p>
+          <div aria-label="Loading messages" className="flex flex-col gap-4">
+            <Skeleton className="h-10 w-48 rounded-2xl" />
+            <Skeleton className="h-14 w-64 self-end rounded-2xl" />
+            <Skeleton className="h-10 w-40 rounded-2xl" />
+            <Skeleton className="h-10 w-56 self-end rounded-2xl" />
+          </div>
         ) : messages.isError ? (
-          <div className="flex flex-col items-start gap-2 text-sm">
-            <p className="text-red-700">Could not load messages.</p>
-            <button type="button" onClick={() => void messages.refetch()} className="btn">
+          <div className="flex flex-col items-center gap-3 py-10 text-sm">
+            <p className="text-destructive">Could not load messages.</p>
+            <Button variant="outline" size="sm" onClick={() => void messages.refetch()}>
               Retry
-            </button>
+            </Button>
           </div>
         ) : count === 0 ? (
-          <p className="text-sm text-slate-500">No messages yet. Say hello.</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            No messages yet. Say hello.
+          </p>
         ) : (
-          <ul className="flex flex-col gap-3">
+          <ul className="mx-auto flex max-w-3xl flex-col gap-3">
             <li
               ref={topRef}
-              className="self-center rounded-full bg-slate-100/80 px-3 py-0.5 text-xs text-slate-500"
+              className="self-center rounded-full bg-muted px-3 py-0.5 text-[11px] text-muted-foreground"
             >
               {!hasMore ? (
                 'Start of conversation'
               ) : older === 'loading' || older === 'idle' ? (
                 'Loading older...'
               ) : (
-                <span className="text-red-700">
+                <span className="text-destructive">
                   {older}{' '}
                   <button
                     type="button"
@@ -373,53 +425,155 @@ export function ChatPane({
               return (
                 <li
                   key={m.clientId + m.senderId}
-                  className={`group relative flex max-w-full flex-col ${mine ? 'items-end self-end' : 'items-start self-start'}`}
+                  className={`group flex max-w-full flex-col ${mine ? 'items-end self-end' : 'items-start self-start'}`}
                 >
-                  <div className="mb-1 px-1 text-[11px] text-slate-500">
+                  <div className="mb-1 px-1 text-[11px] text-muted-foreground">
                     {mine ? 'You' : senderName(m.senderId)} · {formatTime(m.createdAt)}
                     {m.editedAt && !m.deletedAt && ' · edited'}
                   </div>
                   {editing?.id === m.id ? (
-                    <form onSubmit={(e) => void saveEdit(e)} className="flex gap-2">
+                    <form onSubmit={(e) => void saveEdit(e)} className="flex w-full gap-2">
                       <label htmlFor={`edit-${m.id}`} className="sr-only">
                         Edit message
                       </label>
-                      <input
+                      <Input
                         id={`edit-${m.id}`}
                         autoFocus
                         value={editing.text}
                         maxLength={4000}
                         onChange={(e) => setEditing({ id: m.id, text: e.target.value })}
                         onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
-                        className="input min-w-0 px-2 py-1 text-sm md:w-80"
+                        className="h-9 min-w-0 md:w-80"
                       />
-                      <button
-                        type="submit"
-                        disabled={!editing.text.trim()}
-                        className="btn btn-primary"
-                      >
+                      <Button type="submit" size="lg" disabled={!editing.text.trim()}>
                         Save
-                      </button>
-                      <button type="button" onClick={() => setEditing(null)} className="btn">
+                      </Button>
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="ghost"
+                        onClick={() => setEditing(null)}
+                      >
                         Cancel
-                      </button>
+                      </Button>
                     </form>
                   ) : m.deletedAt ? (
-                    <p className="rounded-2xl border border-dashed border-slate-300 px-3.5 py-2 text-sm text-slate-500 italic">
+                    <p className="rounded-2xl border border-dashed px-3.5 py-2 text-sm text-muted-foreground italic">
                       This message was deleted
                     </p>
                   ) : (
-                    <div
-                      className={`max-w-[80vw] space-y-2 rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap shadow-sm md:max-w-md ${
-                        mine
-                          ? 'rounded-br-md bg-accent text-on-accent'
-                          : 'rounded-bl-md border border-slate-200/70 bg-white/90'
-                      } ${m.status ? 'opacity-70' : ''}`}
-                    >
-                      {m.attachment && (
-                        <AttachmentView conversationId={conversationId} file={m.attachment} />
+                    <div className="relative max-w-full">
+                      <div
+                        className={`max-w-[78vw] space-y-2 rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed break-words whitespace-pre-wrap md:max-w-md ${
+                          mine
+                            ? 'rounded-br-md bg-primary text-primary-foreground'
+                            : 'rounded-bl-md bg-bubble shadow-xs ring-1 ring-foreground/8'
+                        } ${m.status ? 'opacity-70' : ''}`}
+                      >
+                        {m.attachment && (
+                          <AttachmentView conversationId={conversationId} file={m.attachment} />
+                        )}
+                        {m.body && <p>{m.body}</p>}
+                      </div>
+                      {live && (
+                        <div
+                          className={`absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 has-data-[state=open]:opacity-100 [@media(hover:hover)]:opacity-0 ${
+                            mine ? 'right-full mr-1 flex-row-reverse' : 'left-full ml-1'
+                          }`}
+                        >
+                          <Popover
+                            open={picker === m.id}
+                            onOpenChange={(o) => setPicker(o ? m.id : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="React"
+                                className="text-muted-foreground"
+                              >
+                                <SmilePlus />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              side="top"
+                              align={mine ? 'end' : 'start'}
+                              className="w-auto flex-row gap-0.5 rounded-full p-1"
+                            >
+                              <div
+                                role="group"
+                                aria-label="Add a reaction"
+                                className="flex gap-0.5"
+                              >
+                                {REACTIONS.map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={() => {
+                                      setPicker(null);
+                                      void run({
+                                        event: 'message:react',
+                                        payload: { messageId: m.id, emoji, on: true },
+                                      });
+                                    }}
+                                    className="flex size-9 items-center justify-center rounded-full text-xl transition-transform duration-150 ease-out hover:scale-115 hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                          {(mine || canDelete) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="More actions"
+                                  className="text-muted-foreground"
+                                >
+                                  <MoreHorizontal />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align={mine ? 'end' : 'start'}
+                                className="w-40"
+                                // Let the edit field keep the focus it grabs.
+                                onCloseAutoFocus={(e) => e.preventDefault()}
+                              >
+                                {mine && (
+                                  <DropdownMenuItem
+                                    onSelect={() => {
+                                      setPicker(null);
+                                      setEditing({ id: m.id, text: m.body });
+                                    }}
+                                  >
+                                    <Pencil />
+                                    Edit
+                                  </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onSelect={() => {
+                                      if (window.confirm('Delete this message for everyone?')) {
+                                        void run({
+                                          event: 'message:delete',
+                                          payload: { messageId: m.id },
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       )}
-                      {m.body && <p>{m.body}</p>}
                     </div>
                   )}
                   {live && m.reactions.length > 0 && (
@@ -443,10 +597,10 @@ export function ChatPane({
                                 },
                               })
                             }
-                            className={`rounded-full border px-2 py-0.5 text-xs font-medium transition-colors ${
+                            className={`flex h-6 items-center gap-1 rounded-full border px-2 text-xs font-medium tabular-nums transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
                               on
-                                ? 'border-accent/50 bg-accent-soft text-accent'
-                                : 'border-slate-200 bg-white/80 hover:bg-slate-100'
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'bg-background hover:bg-accent'
                             }`}
                           >
                             {r.emoji} {r.userIds.length}
@@ -455,86 +609,20 @@ export function ChatPane({
                       })}
                     </div>
                   )}
-                  {live && editing?.id !== m.id && (
-                    <div
-                      className={`mt-1 flex flex-wrap gap-0.5 text-xs text-slate-500 transition-opacity md:glass md:panel md:absolute md:top-5 md:flex-nowrap md:rounded-lg md:p-0.5 md:whitespace-nowrap md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 ${
-                        mine ? 'justify-end md:right-full md:mr-2' : 'md:left-full md:ml-2'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        aria-expanded={picker === m.id}
-                        onClick={() => setPicker(picker === m.id ? null : m.id)}
-                        className="rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 aria-expanded:bg-accent-soft aria-expanded:text-accent"
-                      >
-                        React
-                      </button>
-                      {mine && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPicker(null);
-                            setEditing({ id: m.id, text: m.body });
-                          }}
-                          className="rounded-md px-1.5 py-0.5 font-medium transition-colors hover:bg-slate-100 hover:text-slate-900"
-                        >
-                          Edit
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('Delete this message for everyone?')) {
-                              void run({ event: 'message:delete', payload: { messageId: m.id } });
-                            }
-                          }}
-                          className="rounded-md px-1.5 py-0.5 font-medium text-red-700 transition-colors hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {live && picker === m.id && (
-                    <div
-                      role="group"
-                      aria-label="Add a reaction"
-                      // Near the bottom the row opens below the fold; bring it into view.
-                      ref={(el) => el?.scrollIntoView({ block: 'nearest' })}
-                      onKeyDown={(e) => e.key === 'Escape' && setPicker(null)}
-                      className="glass panel mt-1 flex w-fit gap-0.5 rounded-full p-1"
-                    >
-                      {REACTIONS.map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => {
-                            setPicker(null);
-                            void run({
-                              event: 'message:react',
-                              payload: { messageId: m.id, emoji, on: true },
-                            });
-                          }}
-                          className="rounded-full px-1.5 text-lg leading-8 transition-transform hover:scale-125 hover:bg-slate-100"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                   {mine && !m.status && receipt(m.id)}
                   {m.status === 'sending' && (
-                    <div className="mt-0.5 text-right text-xs text-slate-500">Sending...</div>
+                    <div className="mt-1 px-1 text-right text-[11px] text-muted-foreground">
+                      Sending...
+                    </div>
                   )}
                   {m.status === 'failed' && (
-                    <div className="mt-0.5 flex items-center justify-end gap-2 text-xs text-red-700">
+                    <div className="mt-1 flex items-center justify-end gap-2 px-1 text-xs text-destructive">
                       <span>{failText[m.error ?? ''] ?? 'Not sent.'}</span>
                       {retryable.has(m.error ?? '') && (
                         <button
                           type="button"
                           onClick={() => void deliver(m)}
-                          className="font-medium underline"
+                          className="font-medium underline underline-offset-2"
                         >
                           Retry
                         </button>
@@ -549,39 +637,58 @@ export function ChatPane({
         )}
       </div>
       {actionError && (
-        <p role="alert" className="flex items-center gap-2 px-5 text-xs text-red-700">
+        <p role="alert" className="flex items-center gap-2 px-5 text-xs text-destructive">
           {actionError}
           <button type="button" onClick={() => setActionError('')} className="underline">
             Dismiss
           </button>
         </p>
       )}
-      <p role="status" className="h-5 shrink-0 truncate px-5 text-xs text-slate-500 italic">
+      <p role="status" className="h-5 shrink-0 truncate px-5 text-xs text-muted-foreground italic">
         {typingText(typers.map(senderName))}
       </p>
       {fileError && (
-        <p role="alert" className="mx-3 rounded-lg bg-red-50 px-3 py-1 text-sm text-red-700">
+        <p
+          role="alert"
+          className="mx-3 rounded-lg bg-destructive/10 px-3 py-1.5 text-sm text-destructive"
+        >
           {fileError}
         </p>
       )}
-      <form onSubmit={submit} className="flex gap-2 border-t border-slate-200/70 p-3">
-        <label className="btn cursor-pointer py-2 focus-within:border-accent">
-          Attach
-          <input
-            type="file"
-            accept={ATTACHMENT_TYPES.join(',')}
-            className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (file) void attach(file);
-            }}
-          />
-        </label>
+      <form
+        onSubmit={submit}
+        className="flex shrink-0 items-center gap-2 px-3 pt-1 pb-3 md:px-5 md:pb-4"
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <label
+              className={buttonVariants({
+                variant: 'ghost',
+                size: 'icon-lg',
+                className:
+                  'size-10 shrink-0 cursor-pointer rounded-full text-muted-foreground focus-within:ring-3 focus-within:ring-ring/50',
+              })}
+            >
+              <Paperclip />
+              <span className="sr-only">Attach</span>
+              <input
+                type="file"
+                accept={ATTACHMENT_TYPES.join(',')}
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void attach(file);
+                }}
+              />
+            </label>
+          </TooltipTrigger>
+          <TooltipContent>Attach a file</TooltipContent>
+        </Tooltip>
         <label htmlFor="composer" className="sr-only">
           Message
         </label>
-        <input
+        <Input
           id="composer"
           value={draft}
           onChange={(e) => onDraft(e.target.value)}
@@ -589,11 +696,17 @@ export function ChatPane({
           maxLength={4000}
           autoComplete="off"
           placeholder="Write a message"
-          className="input min-w-0 flex-1"
+          className="h-10 min-w-0 flex-1 rounded-full border-transparent bg-muted px-4 dark:bg-muted"
         />
-        <button type="submit" disabled={!draft.trim()} className="btn btn-primary px-4 py-2">
-          Send
-        </button>
+        <Button
+          type="submit"
+          size="icon-lg"
+          disabled={!draft.trim()}
+          aria-label="Send"
+          className="size-10 shrink-0 rounded-full"
+        >
+          <SendHorizontal />
+        </Button>
       </form>
     </>
   );

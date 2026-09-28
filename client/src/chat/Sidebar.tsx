@@ -157,7 +157,7 @@ export function Sidebar({ openId, onOpen }: Props) {
                         {c.latestMessage
                           ? c.latestMessage.deletedAt
                             ? 'Message deleted'
-                            : c.latestMessage.body
+                            : c.latestMessage.body || 'Attachment'
                           : 'No messages yet'}
                       </span>
                       {c.unreadCount > 0 && (

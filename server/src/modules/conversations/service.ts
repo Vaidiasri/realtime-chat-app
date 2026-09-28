@@ -1,4 +1,6 @@
 import type {
+  Attachment,
+  AttachmentType,
   ConversationSummary,
   DirectSummary,
   GroupSummary,
@@ -31,7 +33,11 @@ type MessageRow = {
 };
 
 // body is null only for a deleted message; the client shows deletedAt instead of the text.
-const toMessage = (r: MessageRow, reactions: Reaction[] = []): Message => ({
+const toMessage = (
+  r: MessageRow,
+  reactions: Reaction[] = [],
+  attachment: Attachment | null = null,
+): Message => ({
   id: r.id,
   conversationId: r.conversation_id,
   senderId: r.sender_id,
@@ -41,16 +47,25 @@ const toMessage = (r: MessageRow, reactions: Reaction[] = []): Message => ({
   editedAt: r.edited_at?.toISOString() ?? null,
   deletedAt: r.deleted_at?.toISOString() ?? null,
   reactions,
+  attachment,
 });
 
-/** The messages with their reactions attached, in one extra query. */
+/** The messages with their reactions and files attached, in two extra queries. */
 async function withReactions(rows: readonly MessageRow[]): Promise<Message[]> {
+  const ids = rows.map((m) => m.id);
+  const [reactions, files] = await Promise.all([q.reactionsFor(ids), q.attachmentsFor(ids)]);
   const byMessage = new Map<string, Reaction[]>();
-  for (const r of await q.reactionsFor(rows.map((m) => m.id))) {
+  for (const r of reactions) {
     const list = byMessage.get(r.message_id) ?? [];
     byMessage.set(r.message_id, [...list, { emoji: r.emoji, userIds: r.user_ids }]);
   }
-  return rows.map((r) => toMessage(r, byMessage.get(r.id)));
+  const fileOf = new Map(
+    files.map((f) => [
+      f.message_id,
+      { id: f.id, name: f.name, mime: f.mime as AttachmentType, size: f.size },
+    ]),
+  );
+  return rows.map((r) => toMessage(r, byMessage.get(r.id), fileOf.get(r.id) ?? null));
 }
 
 type LatestColumns = {
@@ -151,10 +166,11 @@ export async function sendMessage(
     input.conversationId,
     input.clientId,
     input.body,
+    input.attachmentId,
   );
   // A client id reused in another conversation is a client bug, not a retry.
   if (row.conversation_id !== input.conversationId) throw new AppError('invalid_input', 400);
-  return { message: toMessage(row), created };
+  return { message: await one(row), created };
 }
 
 export async function summaryFor(

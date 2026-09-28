@@ -13,7 +13,34 @@ export interface Message {
   editedAt: string | null;
   deletedAt: string | null;
   reactions: Reaction[];
+  /** A file sent with the message. Fetch it with the Bearer token; it is gone once deleted. */
+  attachment: Attachment | null;
 }
+
+export interface Attachment {
+  id: string;
+  name: string;
+  mime: AttachmentType;
+  size: number;
+}
+
+/** Only these, checked on the server against the file's own leading bytes, never its label. */
+export const ATTACHMENT_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+] as const;
+export type AttachmentType = (typeof ATTACHMENT_TYPES)[number];
+export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+export interface AttachmentResponse {
+  attachment: Attachment;
+}
+export const attachmentParam = z.object({ id: z.uuid(), attachmentId: z.uuid() });
+export const attachmentName = z.object({ name: z.string().trim().min(1).max(200) });
 
 /** One emoji on one message, with who added it in the order they did. */
 export interface Reaction {
@@ -70,11 +97,15 @@ export const historyQuery = z
 export type HistoryQuery = z.infer<typeof historyQuery>;
 
 const messageBody = z.string().trim().min(1).max(4000);
-export const messageSendPayload = z.object({
-  conversationId: z.uuid(),
-  clientId: z.uuid(),
-  body: messageBody,
-});
+// A file message may have no text, so the body is only required without an attachment.
+export const messageSendPayload = z
+  .object({
+    conversationId: z.uuid(),
+    clientId: z.uuid(),
+    body: z.string().trim().max(4000),
+    attachmentId: z.uuid().optional(),
+  })
+  .refine((p) => p.body.length > 0 || p.attachmentId !== undefined);
 export type MessageSendPayload = z.infer<typeof messageSendPayload>;
 
 export type MessageSendError = 'invalid_input' | 'not_found' | 'rate_limited' | 'internal';

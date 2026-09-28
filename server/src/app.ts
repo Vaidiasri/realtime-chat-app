@@ -10,6 +10,7 @@ import { logger } from './logger.js';
 import { AppError } from './errors.js';
 import type { AppServer } from './io.js';
 import { requireAuth } from './http.js';
+import { attachmentsRouter } from './modules/attachments/routes.js';
 import { authRouter } from './modules/auth/routes.js';
 import { conversationsRouter } from './modules/conversations/routes.js';
 import { groupsRouter } from './modules/groups/routes.js';
@@ -22,7 +23,9 @@ export function createApp(io: AppServer): express.Express {
   app.disable('x-powered-by');
   // Group avatars are https URLs shown only as <img src>; every other directive keeps its default.
   app.use(
-    helmet({ contentSecurityPolicy: { directives: { 'img-src': ["'self'", 'data:', 'https:'] } } }),
+    helmet({
+      contentSecurityPolicy: { directives: { 'img-src': ["'self'", 'data:', 'blob:', 'https:'] } },
+    }),
   );
   app.use(pinoHttp({ logger }));
   app.use(express.json({ limit: '100kb' }));
@@ -41,7 +44,13 @@ export function createApp(io: AppServer): express.Express {
   });
   api.use('/auth', authRouter(io));
   api.use('/users', requireAuth, usersRouter());
-  api.use('/conversations', requireAuth, conversationsRouter(io), groupsRouter(io));
+  api.use(
+    '/conversations',
+    requireAuth,
+    conversationsRouter(io),
+    groupsRouter(io),
+    attachmentsRouter(),
+  );
   api.use((_req, res) => {
     res.status(404).json({ error: 'not_found' });
   });

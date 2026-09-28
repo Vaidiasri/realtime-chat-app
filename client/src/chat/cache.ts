@@ -246,6 +246,8 @@ const errorText: Record<string, string> = {
   invalid_input: 'Check what you entered and try again.',
   too_late: 'A message can only be deleted within 10 minutes of sending it.',
   timeout: 'No reply from the server. Try again.',
+  unsupported_type: 'Only images (PNG, JPEG, GIF, WebP), PDF and plain text files can be sent.',
+  too_large: 'Files can be at most 5 MB.',
 };
 export const describeError = (e: unknown) =>
   errorText[e instanceof Error ? e.message : ''] ?? 'Something went wrong. Try again.';

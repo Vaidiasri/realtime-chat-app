@@ -1,6 +1,8 @@
 import type { Migration } from 'kysely/migration';
 import { init } from './0001_init.js';
 import { refreshSession } from './0002_refresh_session.js';
+import { attachments } from './0003_attachments.js';
+import { fileOnlyBody } from './0004_file_only_body.js';
 
 // Register each migration here, keyed so names sort in apply order (e.g. '0001_init').
 // A static map instead of FileMigrationProvider: it compiles into dist with the rest
@@ -8,4 +10,6 @@ import { refreshSession } from './0002_refresh_session.js';
 export const migrations: Record<string, Migration> = {
   '0001_init': init,
   '0002_refresh_session': refreshSession,
+  '0003_attachments': attachments,
+  '0004_file_only_body': fileOnlyBody,
 };

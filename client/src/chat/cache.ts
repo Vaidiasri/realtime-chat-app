@@ -7,6 +7,7 @@ import type {
   Message,
   MessagesResponse,
   PresenceUpdate,
+  ReceiptUpdate,
 } from '@chat/shared';
 import { apiFetch } from '../api';
 
@@ -160,6 +161,39 @@ export function putPresence(qc: QueryClient, p: PresenceUpdate) {
     ),
   );
 }
+
+/** A message from someone else arrived while its chat is not being read. */
+export function bumpUnread(qc: QueryClient, conversationId: string) {
+  qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+    list?.map((c) => (c.id === conversationId ? { ...c, unreadCount: c.unreadCount + 1 } : c)),
+  );
+}
+
+/** Someone's marks moved. Mine clear the badge; others move ticks and seen counts. */
+export function putReceipt(qc: QueryClient, r: ReceiptUpdate, meId: string) {
+  const marks = { lastDeliveredId: r.lastDeliveredId, lastReadId: r.lastReadId };
+  qc.setQueryData<ConversationSummary[]>(keys.conversations, (list) =>
+    list?.map((c) => {
+      if (c.id !== r.conversationId) return c;
+      if (r.userId === meId) return r.lastReadId ? { ...c, unreadCount: 0 } : c;
+      return c.type === 'direct' && c.peer.id === r.userId
+        ? { ...c, peer: { ...c.peer, ...marks } }
+        : c;
+    }),
+  );
+  qc.setQueryData<GroupDetail>(
+    keys.group(r.conversationId),
+    (g) =>
+      g && {
+        ...g,
+        members: g.members.map((m) => (m.userId === r.userId ? { ...m, ...marks } : m)),
+      },
+  );
+}
+
+/** True when the mark covers this message. Ids are bigint strings, so compare as BigInt. */
+export const covers = (mark: string | null, id: string) =>
+  mark !== null && BigInt(mark) >= BigInt(id);
 
 export const useGroup = (id: string, enabled = true) =>
   useQuery({

@@ -5,11 +5,13 @@ import { logout } from '../api';
 import { connectSocket, sendMessage, type AppSocket, type SendResult } from '../socket';
 import type { MessageSendPayload } from '@chat/shared';
 import {
+  bumpUnread,
   dropConversation,
   putConversation,
   putGroup,
   putMessage,
   putPresence,
+  putReceipt,
   syncAll,
 } from './cache';
 import { ChatPane } from './ChatPane';
@@ -42,6 +44,20 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     openRef.current = openId;
   }, [openId]);
   const socketRef = useRef<{ socket: AppSocket; stop: () => void }>(undefined);
+
+  // The highest id already marked per conversation and kind: only a higher one is sent.
+  // Not volatile: a mark sent while offline is buffered and goes out on reconnect.
+  const marked = useRef(new Map<string, bigint>());
+  const mark = useCallback(
+    (conversationId: string, messageId: string, kind: 'delivered' | 'read') => {
+      const id = BigInt(messageId);
+      const key = `${conversationId}:${kind}`;
+      if ((marked.current.get(key) ?? 0n) >= id) return;
+      marked.current.set(key, id);
+      socketRef.current?.socket.emit('receipt:mark', { conversationId, messageId, kind });
+    },
+    [],
+  );
   const [typing, setTyping] = useState<Typing>({});
   const anyTyping = Object.values(typing).some((c) => Object.keys(c).length > 0);
 
@@ -79,7 +95,13 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     socket.on('message:new', (m) => {
       putMessage(qc, m);
       setTyping((all) => setTyper(all, m.conversationId, m.senderId, null));
+      if (m.senderId === me.id) return;
+      // An open, visible chat marks it read itself (ChatPane). Anything else is only delivered.
+      if (openRef.current === m.conversationId && document.visibilityState === 'visible') return;
+      mark(m.conversationId, m.id, 'delivered');
+      bumpUnread(qc, m.conversationId);
     });
+    socket.on('receipt:update', (r) => putReceipt(qc, r, me.id));
     socket.on('presence:update', (p) => putPresence(qc, p));
     // The sender's other tabs get their own typing too; never show yourself.
     socket.on('typing:update', (t) => {
@@ -105,7 +127,7 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
     });
     socketRef.current = conn;
     return conn.stop;
-  }, [qc, onSignedOut, me.id]);
+  }, [qc, onSignedOut, me.id, mark]);
 
   const openConversation = (id: string | null) => {
     setOpenId(id);
@@ -180,6 +202,7 @@ export function ChatApp({ me, onSignedOut }: { me: UserSummary; onSignedOut: () 
               send={send}
               typers={Object.keys(typing[openId] ?? {})}
               onTyping={signalTyping}
+              onRead={mark}
               onBack={() => openConversation(null)}
               onInfo={() => setInfo(true)}
             />

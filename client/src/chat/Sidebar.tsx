@@ -152,8 +152,16 @@ export function Sidebar({ openId, onOpen }: Props) {
                         {formatTime(activity(c))}
                       </time>
                     </span>
-                    <span className="truncate text-sm text-slate-500">
-                      {c.latestMessage?.body ?? 'No messages yet'}
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm text-slate-500">
+                        {c.latestMessage?.body ?? 'No messages yet'}
+                      </span>
+                      {c.unreadCount > 0 && (
+                        <span className="shrink-0 rounded-full bg-slate-900 px-1.5 text-xs font-semibold text-white">
+                          {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                          <span className="sr-only"> unread</span>
+                        </span>
+                      )}
                     </span>
                   </span>
                 </button>

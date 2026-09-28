@@ -20,8 +20,16 @@ export interface UserSummary {
 export interface DirectSummary {
   id: string;
   type: 'direct';
-  peer: { id: string; displayName: string; online: boolean; lastSeenAt: string | null };
+  peer: {
+    id: string;
+    displayName: string;
+    online: boolean;
+    lastSeenAt: string | null;
+    lastDeliveredId: string | null;
+    lastReadId: string | null;
+  };
   latestMessage: Message | null;
+  unreadCount: number;
   createdAt: string;
 }
 
@@ -32,7 +40,7 @@ export const startDirectBody = z.object({ userId: z.uuid() });
 export const conversationIdParam = z.object({ id: z.uuid() });
 
 // A positive bigint as a string, so it compares in SQL and never loses precision in JS.
-const messageId = z.string().regex(/^[1-9][0-9]{0,18}$/);
+export const messageId = z.string().regex(/^[1-9][0-9]{0,18}$/);
 /** History paging: `before` walks older, `after` fills a gap; never both. */
 export const historyQuery = z
   .object({ before: messageId.optional(), after: messageId.optional() })

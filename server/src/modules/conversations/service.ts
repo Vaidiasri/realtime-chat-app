@@ -66,8 +66,11 @@ const toSummary = (r: DirectRow): DirectSummary => ({
     displayName: r.peer_name,
     online: isOnline(r.peer_id),
     lastSeenAt: r.peer_last_seen?.toISOString() ?? null,
+    lastDeliveredId: r.peer_delivered,
+    lastReadId: r.peer_read,
   },
   latestMessage: latestOf(r),
+  unreadCount: Number(r.unread_count),
   createdAt: r.created_at.toISOString(),
 });
 
@@ -79,6 +82,7 @@ const toGroupSummary = (r: GroupRow): GroupSummary => ({
   memberCount: Number(r.member_count ?? 0),
   myRole: r.role,
   latestMessage: latestOf(r),
+  unreadCount: Number(r.unread_count),
   createdAt: r.created_at.toISOString(),
 });
 

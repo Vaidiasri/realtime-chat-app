@@ -10,6 +10,13 @@ const messageColumns = [
   'created_at',
 ] as const;
 
+// Messages from others after my read mark. Deleted ones (null body) do not count.
+const unreadCount = sql<string>`(
+  SELECT count(*) FROM messages um
+  WHERE um.conversation_id = c.id AND um.sender_id <> me.user_id AND um.deleted_at IS NULL
+    AND um.id > coalesce(me.last_read_message_id, 0)
+)`.as('unread_count');
+
 export const conversationIdsFor = async (userId: string) =>
   (
     await db
@@ -104,6 +111,9 @@ export const summaries = (userId: string, conversationId?: string) => {
       'u.id as peer_id',
       'u.display_name as peer_name',
       'u.last_seen_at as peer_last_seen',
+      'pm.last_delivered_message_id as peer_delivered',
+      'pm.last_read_message_id as peer_read',
+      unreadCount,
       'lm.id as m_id',
       'lm.sender_id as m_sender_id',
       'lm.client_id as m_client_id',
@@ -161,6 +171,7 @@ export const groupSummaries = (userId: string, conversationId?: string) => {
         .select(eb.fn.countAll<string>().as('n'))
         .whereRef('mc.conversation_id', '=', 'c.id')
         .as('member_count'),
+      unreadCount,
       'lm.id as m_id',
       'lm.sender_id as m_sender_id',
       'lm.client_id as m_client_id',

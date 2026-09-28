@@ -80,8 +80,8 @@ export function AuthPage({ onAuthed }: { onAuthed: (s: AuthResponse) => void }) 
 
   const isSignup = mode === 'signup';
   return (
-    <main className="flex h-full flex-col items-center justify-center overflow-y-auto bg-[radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)] px-4 py-8">
-      <Card className="w-full max-w-sm py-7 shadow-xl shadow-primary/5 [--card-spacing:--spacing(7)]">
+    <main className="flex h-full flex-col items-center overflow-y-auto bg-[radial-gradient(60rem_40rem_at_50%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)] px-4 py-8">
+      <Card className="my-auto w-full max-w-sm py-7 shadow-xl shadow-primary/5 [--card-spacing:--spacing(7)]">
         <CardHeader className="justify-items-center text-center">
           <div className="mb-4 flex flex-col items-center gap-2.5">
             <Logo className="size-11 rounded-xl" />

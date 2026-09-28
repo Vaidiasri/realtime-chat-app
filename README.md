@@ -3,7 +3,7 @@
 A realtime chat app with one to one messages and group chats with roles. Every REST call and
 every socket event checks who the user is and whether they are allowed to do it.
 
-**Live demo:** _add the Render URL here_ · Demo logins: `aarav@demo.chat`, `priya@demo.chat`,
+**Live demo:** https://realtime-chat-f85i.onrender.com (free tier: the first load after idle can take about a minute) · Demo logins: `aarav@demo.chat`, `priya@demo.chat`,
 `rahul@demo.chat`, `sneha@demo.chat`, `vikram@demo.chat`, `meera@demo.chat`, all with the
 password `password123` (demo data, not a secret).
 
